@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+
+{% block title %}Receive Notesheet - WBSEDCL{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0"><i class="bi bi-inbox-fill"></i> Receive Notesheet</h4>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('receive_notesheet') }}" class="needs-validation" novalidate>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="notesheet_number" class="form-label">Notesheet Number *</label>
+                                <input type="text" class="form-control" id="notesheet_number" name="notesheet_number" required>
+                                <div class="invalid-feedback">Please provide a notesheet number.</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="received_date" class="form-label">Received Date *</label>
+                                <input type="date" class="form-control" id="received_date" name="received_date" value="{{ today }}" required>
+                                <div class="invalid-feedback">Please provide the received date.</div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="subject" class="form-label">Subject *</label>
+                            <textarea class="form-control" id="subject" name="subject" rows="2" required></textarea>
+                            <div class="invalid-feedback">Please provide a subject.</div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="sender_name" class="form-label">Sender Name *</label>
+                                <input type="text" class="form-control" id="sender_name" name="sender_name" required>
+                                <div class="invalid-feedback">Please provide sender name.</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="sender_organization" class="form-label">Sender Organization</label>
+                                <input type="text" class="form-control" id="sender_organization" name="sender_organization">
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="reference_number" class="form-label">Reference Number</label>
+                                <input type="text" class="form-control" id="reference_number" name="reference_number">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="category" class="form-label">Category</label>
+                                <select class="form-select" id="category" name="category">
+                                    <option value="">Select Category</option>
+                                    <option value="Administrative">Administrative</option>
+                                    <option value="Financial">Financial</option>
+                                    <option value="Technical">Technical</option>
+                                    <option value="Legal">Legal</option>
+                                    <option value="HR">HR</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="priority" class="form-label">Priority</label>
+                            <select class="form-select" id="priority" name="priority">
+                                <option value="Normal" selected>Normal</option>
+                                <option value="High">High</option>
+                                <option value="Urgent">Urgent</option>
+                                <option value="Low">Low</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="remarks" class="form-label">Remarks</label>
+                            <textarea class="form-control" id="remarks" name="remarks" rows="3"></textarea>
+                        </div>
+                        
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-save"></i> Receive Notesheet
+                            </button>
+                            <a href="{{ url_for('notesheets_list') }}" class="btn btn-secondary">
+                                <i class="bi bi-x-circle"></i> Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Set today's date as default
+document.getElementById('received_date').valueAsDate = new Date();
+
+// Form validation
+(function () {
+    'use strict'
+    var forms = document.querySelectorAll('.needs-validation')
+    Array.prototype.slice.call(forms).forEach(function (form) {
+        form.addEventListener('submit', function (event) {
+            if (!form.checkValidity()) {
+                event.preventDefault()
+                event.stopPropagation()
+            }
+            form.classList.add('was-validated')
+        }, false)
+    })
+})()
+</script>
+{% endblock %}

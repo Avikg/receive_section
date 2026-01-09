@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+
+{% block title %}Receive Bill - WBSEDCL{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-10">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h4 class="mb-0"><i class="bi bi-inbox-fill"></i> Receive Bill</h4>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('receive_bill') }}" class="needs-validation" novalidate>
+                        <h5 class="mb-3">Bill Information</h5>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="bill_number" class="form-label">Bill Number *</label>
+                                <input type="text" class="form-control" id="bill_number" name="bill_number" required>
+                                <div class="invalid-feedback">Please provide a bill number.</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="invoice_number" class="form-label">Invoice Number</label>
+                                <input type="text" class="form-control" id="invoice_number" name="invoice_number">
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="bill_date" class="form-label">Bill Date *</label>
+                                <input type="date" class="form-control" id="bill_date" name="bill_date" required>
+                                <div class="invalid-feedback">Please provide the bill date.</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="received_date" class="form-label">Received Date *</label>
+                                <input type="date" class="form-control" id="received_date" name="received_date" required>
+                                <div class="invalid-feedback">Please provide the received date.</div>
+                            </div>
+                        </div>
+                        
+                        <hr class="my-4">
+                        <h5 class="mb-3">Vendor Information</h5>
+                        
+                        <div class="mb-3">
+                            <label for="vendor_name" class="form-label">Vendor Name *</label>
+                            <input type="text" class="form-control" id="vendor_name" name="vendor_name" required>
+                            <div class="invalid-feedback">Please provide vendor name.</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="vendor_address" class="form-label">Vendor Address</label>
+                            <textarea class="form-control" id="vendor_address" name="vendor_address" rows="2"></textarea>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="vendor_gstin" class="form-label">GSTIN</label>
+                                <input type="text" class="form-control" id="vendor_gstin" name="vendor_gstin" placeholder="22AAAAA0000A1Z5">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="vendor_pan" class="form-label">PAN</label>
+                                <input type="text" class="form-control" id="vendor_pan" name="vendor_pan" placeholder="AAAAA0000A">
+                            </div>
+                        </div>
+                        
+                        <hr class="my-4">
+                        <h5 class="mb-3">Financial Details</h5>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="bill_amount" class="form-label">Bill Amount *</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">₹</span>
+                                    <input type="number" class="form-control" id="bill_amount" name="bill_amount" step="0.01" required>
+                                    <div class="invalid-feedback">Please provide bill amount.</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="taxable_amount" class="form-label">Taxable Amount</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">₹</span>
+                                    <input type="number" class="form-control" id="taxable_amount" name="taxable_amount" step="0.01">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="gst_amount" class="form-label">GST Amount</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">₹</span>
+                                    <input type="number" class="form-control" id="gst_amount" name="gst_amount" step="0.01">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="tds_amount" class="form-label">TDS Amount</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">₹</span>
+                                    <input type="number" class="form-control" id="tds_amount" name="tds_amount" step="0.01">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="net_payable_amount" class="form-label">Net Payable Amount</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">₹</span>
+                                    <input type="number" class="form-control" id="net_payable_amount" name="net_payable_amount" step="0.01">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <hr class="my-4">
+                        <h5 class="mb-3">Additional Information</h5>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="bill_type" class="form-label">Bill Type</label>
+                                <select class="form-select" id="bill_type" name="bill_type">
+                                    <option value="">Select Type</option>
+                                    <option value="Purchase">Purchase</option>
+                                    <option value="Service">Service</option>
+                                    <option value="Maintenance">Maintenance</option>
+                                    <option value="Utility">Utility</option>
+                                    <option value="Contractor">Contractor</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="category" class="form-label">Category</label>
+                                <select class="form-select" id="category" name="category">
+                                    <option value="">Select Category</option>
+                                    <option value="Operational">Operational</option>
+                                    <option value="Capital">Capital</option>
+                                    <option value="Administrative">Administrative</option>
+                                    <option value="Technical">Technical</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="priority" class="form-label">Priority</label>
+                            <select class="form-select" id="priority" name="priority">
+                                <option value="Normal" selected>Normal</option>
+                                <option value="High">High</option>
+                                <option value="Urgent">Urgent</option>
+                                <option value="Low">Low</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="description" class="form-label">Description</label>
+                            <textarea class="form-control" id="description" name="description" rows="3"></textarea>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="remarks" class="form-label">Remarks</label>
+                            <textarea class="form-control" id="remarks" name="remarks" rows="2"></textarea>
+                        </div>
+                        
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-success btn-lg">
+                                <i class="bi bi-save"></i> Receive Bill
+                            </button>
+                            <a href="{{ url_for('bills_list') }}" class="btn btn-secondary">
+                                <i class="bi bi-x-circle"></i> Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Set today's date as default for received date
+document.getElementById('received_date').valueAsDate = new Date();
+
+// Auto-calculate net payable if not provided
+document.getElementById('bill_amount').addEventListener('input', calculateNet);
+document.getElementById('tds_amount').addEventListener('input', calculateNet);
+
+function calculateNet() {
+    const billAmount = parseFloat(document.getElementById('bill_amount').value) || 0;
+    const tdsAmount = parseFloat(document.getElementById('tds_amount').value) || 0;
+    const netPayable = billAmount - tdsAmount;
+    document.getElementById('net_payable_amount').value = netPayable.toFixed(2);
+}
+
+// Form validation
+(function () {
+    'use strict'
+    var forms = document.querySelectorAll('.needs-validation')
+    Array.prototype.slice.call(forms).forEach(function (form) {
+        form.addEventListener('submit', function (event) {
+            if (!form.checkValidity()) {
+                event.preventDefault()
+                event.stopPropagation()
+            }
+            form.classList.add('was-validated')
+        }, false)
+    })
+})()
+</script>
+{% endblock %}

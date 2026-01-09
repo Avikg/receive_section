@@ -1,0 +1,228 @@
+{% extends "base.html" %}
+
+{% block title %}Notesheet Details - WBSEDCL{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-file-earmark-text"></i> Notesheet Details</h2>
+        <a href="{{ url_for('notesheets_list') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Back to List
+        </a>
+    </div>
+    
+    <div class="row">
+        <!-- Notesheet Information -->
+        <div class="col-md-8">
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-info-circle"></i> Notesheet Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <strong>Notesheet Number:</strong>
+                            <p class="text-primary fs-5">{{ notesheet.notesheet_number }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <strong>Reference Number:</strong>
+                            <p>{{ notesheet.reference_number or 'N/A' }}</p>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <strong>Subject:</strong>
+                            <p class="fs-6">{{ notesheet.subject }}</p>
+                        </div>
+                    </div>
+                    
+                    <hr>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <strong>Sender Name:</strong>
+                            <p>{{ notesheet.sender_name }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <strong>Sender Organization:</strong>
+                            <p>{{ notesheet.sender_organization or 'N/A' }}</p>
+                        </div>
+                    </div>
+                    
+                    {% if notesheet.sender_address %}
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <strong>Sender Address:</strong>
+                            <p>{{ notesheet.sender_address }}</p>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <hr>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <strong>Received Date:</strong>
+                            <p>{{ notesheet.received_date }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <strong>Category:</strong>
+                            <p>{{ notesheet.category or 'N/A' }}</p>
+                        </div>
+                    </div>
+                    
+                    {% if notesheet.remarks %}
+                    <hr>
+                    <div class="row">
+                        <div class="col-md-12">
+                            <strong>Remarks:</strong>
+                            <p>{{ notesheet.remarks }}</p>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Movement History -->
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="bi bi-clock-history"></i> Movement History</h5>
+                </div>
+                <div class="card-body">
+                    {% if movements %}
+                    <div class="timeline">
+                        {% for movement in movements %}
+                        <div class="timeline-item">
+                            <div class="timeline-icon">
+                                <i class="bi bi-arrow-right-circle"></i>
+                            </div>
+                            <div class="card mb-3">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between">
+                                        <div>
+                                            <h6 class="mb-1">
+                                                <span class="badge bg-primary">{{ movement.action_taken }}</span>
+                                            </h6>
+                                            <p class="mb-1">
+                                                <strong>From:</strong> {{ movement.from_user_name or 'Receive Section' }}
+                                                <i class="bi bi-arrow-right mx-2"></i>
+                                                <strong>To:</strong> {{ movement.to_user_name }}
+                                            </p>
+                                            <p class="mb-1">
+                                                <strong>Forwarded by:</strong> {{ movement.forwarded_by_name }}
+                                            </p>
+                                            {% if movement.comments %}
+                                            <p class="mb-0 text-muted">
+                                                <i class="bi bi-chat-left-text"></i> {{ movement.comments }}
+                                            </p>
+                                            {% endif %}
+                                        </div>
+                                        <div class="text-end text-muted">
+                                            <small>{{ movement.forwarded_date }}</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="text-muted">No movement history available.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Status and Actions -->
+        <div class="col-md-4">
+            <!-- Current Status -->
+            <div class="card mb-4">
+                <div class="card-header bg-warning">
+                    <h5 class="mb-0"><i class="bi bi-info-square"></i> Status</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <strong>Current Status:</strong>
+                        <h5>
+                            <span class="badge 
+                                {% if notesheet.current_status == 'Received' %}bg-primary
+                                {% elif notesheet.current_status == 'In-Progress' %}bg-warning
+                                {% elif notesheet.current_status == 'Forwarded' %}bg-info
+                                {% elif notesheet.current_status == 'Closed' %}bg-secondary
+                                {% else %}bg-dark
+                                {% endif %}">
+                                {{ notesheet.current_status }}
+                            </span>
+                        </h5>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <strong>Priority:</strong>
+                        <h5>
+                            {% if notesheet.priority == 'Urgent' %}
+                                <span class="badge bg-danger">{{ notesheet.priority }}</span>
+                            {% elif notesheet.priority == 'High' %}
+                                <span class="badge bg-warning">{{ notesheet.priority }}</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{{ notesheet.priority }}</span>
+                            {% endif %}
+                        </h5>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <strong>Current Holder:</strong>
+                        <p>{{ notesheet.current_holder_name or 'N/A' }}</p>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <strong>Received By:</strong>
+                        <p>{{ notesheet.received_by_name }}</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Forward Notesheet -->
+            {% if current_user.can_forward() and notesheet.current_holder == current_user.id %}
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-forward"></i> Forward Notesheet</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('forward_notesheet_route', notesheet_id=notesheet.notesheet_id) }}">
+                        <div class="mb-3">
+                            <label for="to_user" class="form-label">Forward To *</label>
+                            <select class="form-select" id="to_user" name="to_user" required>
+                                <option value="">Select User</option>
+                                {% for user in users %}
+                                <option value="{{ user.user_id }}">{{ user.full_name }} - {{ user.designation or user.department }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="action" class="form-label">Action</label>
+                            <select class="form-select" id="action" name="action">
+                                <option value="Forwarded">Forwarded</option>
+                                <option value="Approved">Approved</option>
+                                <option value="Returned">Returned</option>
+                                <option value="Rejected">Rejected</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="comments" class="form-label">Comments</label>
+                            <textarea class="form-control" id="comments" name="comments" rows="3"></textarea>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="bi bi-forward"></i> Forward Notesheet
+                        </button>
+                    </form>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

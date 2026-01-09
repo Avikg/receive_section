@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - WBSEDCL{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h2 class="mb-4"><i class="bi bi-speedometer2"></i> Dashboard</h2>
+    
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="bi bi-file-earmark-text"></i> Total Notesheets</h5>
+                    <h2>{{ stats.total_notesheets }}</h2>
+                    <p class="card-text">{{ stats.pending_notesheets }} pending</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3 mb-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="bi bi-receipt"></i> Total Bills</h5>
+                    <h2>{{ stats.total_bills }}</h2>
+                    <p class="card-text">{{ stats.pending_bills }} pending</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3 mb-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="bi bi-inbox"></i> My Pending Items</h5>
+                    <h2>{{ stats.my_pending_items }}</h2>
+                    <p class="card-text">Assigned to you</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3 mb-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="bi bi-person-check"></i> Your Role</h5>
+                    <p class="card-text">
+                        {% if current_user.is_superuser %}
+                            <i class="bi bi-shield-check"></i> Superuser
+                        {% elif current_user.can_receive() %}
+                            <i class="bi bi-inbox-fill"></i> Receive Section
+                        {% else %}
+                            <i class="bi bi-person"></i> User
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Recent Items -->
+    <div class="row">
+        <!-- Recent Notesheets -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-file-earmark-text"></i> My Recent Notesheets</h5>
+                </div>
+                <div class="card-body">
+                    {% if recent_notesheets %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Number</th>
+                                        <th>Subject</th>
+                                        <th>Status</th>
+                                        <th>Priority</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for ns in recent_notesheets %}
+                                    <tr>
+                                        <td><small>{{ ns.notesheet_number }}</small></td>
+                                        <td><small>{{ ns.subject[:50] }}...</small></td>
+                                        <td><span class="badge bg-info">{{ ns.current_status }}</span></td>
+                                        <td>
+                                            {% if ns.priority == 'Urgent' %}
+                                                <span class="badge bg-danger">{{ ns.priority }}</span>
+                                            {% elif ns.priority == 'High' %}
+                                                <span class="badge bg-warning">{{ ns.priority }}</span>
+                                            {% else %}
+                                                <span class="badge bg-secondary">{{ ns.priority }}</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <a href="{{ url_for('notesheet_detail', notesheet_id=ns.notesheet_id) }}" class="btn btn-sm btn-primary">
+                                                <i class="bi bi-eye"></i>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        <a href="{{ url_for('notesheets_list') }}" class="btn btn-primary btn-sm">View All Notesheets</a>
+                    {% else %}
+                        <p class="text-muted">No notesheets assigned to you.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Recent Bills -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="bi bi-receipt"></i> My Recent Bills</h5>
+                </div>
+                <div class="card-body">
+                    {% if recent_bills %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Bill No.</th>
+                                        <th>Vendor</th>
+                                        <th>Amount</th>
+                                        <th>Status</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for bill in recent_bills %}
+                                    <tr>
+                                        <td><small>{{ bill.bill_number }}</small></td>
+                                        <td><small>{{ bill.vendor_name[:30] }}</small></td>
+                                        <td><small>₹{{ "{:,.2f}".format(bill.bill_amount) }}</small></td>
+                                        <td><span class="badge bg-info">{{ bill.current_status }}</span></td>
+                                        <td>
+                                            <a href="{{ url_for('bill_detail', bill_id=bill.bill_id) }}" class="btn btn-sm btn-success">
+                                                <i class="bi bi-eye"></i>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        <a href="{{ url_for('bills_list') }}" class="btn btn-success btn-sm">View All Bills</a>
+                    {% else %}
+                        <p class="text-muted">No bills assigned to you.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Quick Actions -->
+    {% if current_user.can_receive() %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-lightning"></i> Quick Actions</h5>
+                </div>
+                <div class="card-body">
+                    <a href="{{ url_for('receive_notesheet') }}" class="btn btn-primary me-2">
+                        <i class="bi bi-plus-circle"></i> Receive Notesheet
+                    </a>
+                    <a href="{{ url_for('receive_bill') }}" class="btn btn-success">
+                        <i class="bi bi-plus-circle"></i> Receive Bill
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
