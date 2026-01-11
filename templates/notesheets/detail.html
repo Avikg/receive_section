@@ -91,7 +91,11 @@
                                 {% if movement.to_section_name %}
                                 <div class="text-center flex-grow-1">
                                     <h4 class="mb-0 {% if movement.is_current %}text-primary{% else %}text-secondary{% endif %} fw-bold">
-                                        <i class="bi bi-{% if movement.is_current %}pin-angle-fill{% else %}geo-alt{% endif %}"></i> {{ movement.to_section_name }}
+                                        <i class="bi bi-{% if movement.is_current %}pin-angle-fill{% else %}geo-alt{% endif %}"></i> 
+                                        {{ movement.to_section_name }}
+                                        {% if movement.to_user_name %}
+                                            <span style="font-size: 0.7em; font-weight: normal;">({{ movement.to_user_name }})</span>
+                                        {% endif %}
                                     </h4>
                                     <small class="text-muted">{% if movement.is_current %}Currently Holding{% else %}Was Holding{% endif %}</small>
                                 </div>
@@ -230,16 +234,43 @@
                 </div>
                 <div class="card-body">
                     <form method="POST" action="{{ url_for('forward_notesheet_route', notesheet_id=notesheet.notesheet_id) }}" onsubmit="return validateForward()">
+                        
+                        <!-- Section Dropdown -->
                         <div class="mb-3">
-                            <label for="to_user" class="form-label">Forward To *</label>
-                            <select class="form-select" id="to_user" name="to_user" required>
-                                <option value="">Select User</option>
+                            <label for="section_select" class="form-label">Select Section *</label>
+                            <select class="form-select" id="section_select" required onchange="filterUsers()">
+                                <option value="">Choose Section</option>
+                                {% set sections = [] %}
                                 {% for user in users %}
-                                <option value="{{ user.user_id }}">
-                                    {{ user.section_name or 'N/A' }} - {{ user.full_name }} ({{ user.designation or 'N/A' }})
-                                </option>
+                                    {% if user.section_name and user.section_name not in sections %}
+                                        {% set _ = sections.append(user.section_name) %}
+                                    {% endif %}
+                                {% endfor %}
+                                {% for section in sections | sort %}
+                                <option value="{{ section }}">{{ section }}</option>
                                 {% endfor %}
                             </select>
+                        </div>
+                        
+                        <!-- User Dropdown -->
+                        <div class="mb-3">
+                            <label for="to_user" class="form-label">Forward To *</label>
+                            <select class="form-select" id="to_user" name="to_user" required disabled>
+                                <option value="">First select a section</option>
+                            </select>
+                            <small class="text-muted" id="user_count"></small>
+                        </div>
+                        
+                        <!-- Hidden storage for all users data -->
+                        <div id="all_users_data" style="display: none;">
+                            {% for user in users %}
+                            <div class="user-data" 
+                                 data-userid="{{ user.user_id }}"
+                                 data-section="{{ user.section_name or '' }}"
+                                 data-name="{{ user.full_name }}"
+                                 data-designation="{{ user.designation or '' }}">
+                            </div>
+                            {% endfor %}
                         </div>
                         
                         <div class="mb-3">
@@ -309,12 +340,77 @@ document.addEventListener('DOMContentLoaded', function() {
         forwardDateInput.value = today;
         forwardDateInput.max = today; // Cannot select future dates
     }
+    
+    // DEBUG: Log all available users
+    console.log('=== AVAILABLE USERS FOR FORWARDING ===');
+    const allUsersData = document.querySelectorAll('.user-data');
+    allUsersData.forEach(function(userData) {
+        console.log('User:', {
+            id: userData.getAttribute('data-userid'),
+            name: userData.getAttribute('data-name'),
+            section: userData.getAttribute('data-section'),
+            designation: userData.getAttribute('data-designation')
+        });
+    });
+    console.log('Total users available:', allUsersData.length);
 });
+
+// Filter users based on selected section
+function filterUsers() {
+    const sectionSelect = document.getElementById('section_select');
+    const userSelect = document.getElementById('to_user');
+    const userCount = document.getElementById('user_count');
+    const selectedSection = sectionSelect.value;
+    
+    // Reset user dropdown
+    userSelect.innerHTML = '<option value="">Select User</option>';
+    
+    if (!selectedSection) {
+        userSelect.disabled = true;
+        userCount.textContent = '';
+        return;
+    }
+    
+    // Enable user dropdown
+    userSelect.disabled = false;
+    
+    // Get all user data from hidden div
+    const allUsersData = document.querySelectorAll('.user-data');
+    let count = 0;
+    
+    allUsersData.forEach(function(userData) {
+        const userSection = userData.getAttribute('data-section');
+        
+        if (userSection === selectedSection) {
+            const userId = userData.getAttribute('data-userid');
+            const userName = userData.getAttribute('data-name');
+            const userDesignation = userData.getAttribute('data-designation');
+            
+            const option = document.createElement('option');
+            option.value = userId;
+            option.textContent = userName;
+            if (userDesignation) {
+                option.textContent += ' - ' + userDesignation;
+            }
+            
+            userSelect.appendChild(option);
+            count++;
+        }
+    });
+    
+    userCount.textContent = count + ' user(s) available in ' + selectedSection;
+}
 
 function validateForward() {
     const toUser = document.getElementById('to_user').value;
     const action = document.getElementById('action').value;
     const forwardDate = document.getElementById('forward_date').value;
+    const section = document.getElementById('section_select').value;
+    
+    if (!section) {
+        alert('Please select a section');
+        return false;
+    }
     
     if (!toUser) {
         alert('Please select a user to forward to');

@@ -59,11 +59,14 @@
                             </td>
                             <td><small>{{ user.last_login or 'Never' }}</small></td>
                             <td>
+                                <a href="{{ url_for('edit_user', user_id=user.user_id) }}" class="btn btn-sm btn-warning" title="Edit User">
+                                    <i class="bi bi-pencil-square"></i>
+                                </a>
                                 <button class="btn btn-sm btn-info" onclick="viewUser({{ user.user_id }})" title="View Details">
                                     <i class="bi bi-eye"></i>
                                 </button>
                                 {% if user.user_id != current_user.id %}
-                                <button class="btn btn-sm btn-warning" onclick="toggleUserStatus({{ user.user_id }})" title="Toggle Status">
+                                <button class="btn btn-sm btn-danger" onclick="toggleUserStatus({{ user.user_id }})" title="Toggle Status">
                                     <i class="bi bi-power"></i>
                                 </button>
                                 {% endif %}

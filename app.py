@@ -3,6 +3,12 @@ WBSEDCL Tracking System - Main Application with Section Support
 Flask web application for notesheet and bill tracking
 """
 
+"""
+WBSEDCL Document Tracking System
+VERSION: 2026-01-11-FIXED-FORWARDING-v4
+Last Updated: 2026-01-11
+"""
+
 from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from functools import wraps
@@ -67,8 +73,24 @@ class User(UserMixin):
     
     def is_section_head(self):
         """Check if user is a section head"""
-        perms = self.get_permissions()
-        return perms.get('is_section_head', False) or self.is_superuser
+        if self.is_superuser:
+            return True
+        
+        # Query database directly to check if user has section_head role
+        db = WBSEDCLDatabase()
+        conn = db.connect()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT COUNT(*) FROM user_role_mapping urm
+            JOIN user_roles ur ON urm.role_id = ur.role_id
+            WHERE urm.user_id = ? AND ur.role_name = 'section_head'
+        ''', (self.id,))
+        
+        has_role = cursor.fetchone()[0] > 0
+        db.close()
+        
+        return has_role
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -126,6 +148,11 @@ def index():
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
     return redirect(url_for('login'))
+
+@app.route('/version')
+def version_check():
+    """Quick version check - DO NOT DELETE"""
+    return "VERSION: 2026-01-11-FIXED-FORWARDING-v4 | Lines: 1629"
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -193,27 +220,27 @@ def dashboard():
     conn = db.connect()
     cursor = conn.cursor()
     
-    # Get statistics
-    cursor.execute('SELECT COUNT(*) FROM notesheets')
-    total_notesheets = cursor.fetchone()[0]
+    # Get statistics for CURRENT USER ONLY
+    # My Notesheets - where I'm the current holder
+    cursor.execute('SELECT COUNT(*) FROM notesheets WHERE current_holder = ?', (current_user.id,))
+    my_notesheets = cursor.fetchone()[0]
     
-    cursor.execute("SELECT COUNT(*) FROM notesheets WHERE current_status != 'Closed'")
-    pending_notesheets = cursor.fetchone()[0]
+    # My Pending Notesheets - where I'm the current holder and status is not Closed
+    cursor.execute("SELECT COUNT(*) FROM notesheets WHERE current_holder = ? AND current_status != 'Closed'", 
+                   (current_user.id,))
+    my_pending_notesheets = cursor.fetchone()[0]
     
-    cursor.execute('SELECT COUNT(*) FROM bills')
-    total_bills = cursor.fetchone()[0]
+    # My Bills - where I'm the current holder
+    cursor.execute('SELECT COUNT(*) FROM bills WHERE current_holder = ?', (current_user.id,))
+    my_bills = cursor.fetchone()[0]
     
-    cursor.execute("SELECT COUNT(*) FROM bills WHERE payment_status = 'Pending'")
-    pending_bills = cursor.fetchone()[0]
+    # My Pending Bills - where I'm the current holder and payment status is Pending
+    cursor.execute("SELECT COUNT(*) FROM bills WHERE current_holder = ? AND payment_status = 'Pending'", 
+                   (current_user.id,))
+    my_pending_bills = cursor.fetchone()[0]
     
-    cursor.execute('''
-        SELECT COUNT(*) FROM (
-            SELECT notesheet_id FROM notesheets WHERE current_holder = ?
-            UNION
-            SELECT bill_id FROM bills WHERE current_holder = ?
-        )
-    ''', (current_user.id, current_user.id))
-    my_pending_items = cursor.fetchone()[0]
+    # Total items with me (for "My Pending Items" card)
+    my_pending_items = my_pending_notesheets + my_pending_bills
     
     # Get parked documents count (Receive Section only)
     parked_count = 0
@@ -224,18 +251,109 @@ def dashboard():
         parked_bills = cursor.fetchone()[0]
         parked_count = parked_ns + parked_bills
     
+    # Get recent notesheets (last 5)
+    cursor.execute('''
+        SELECT notesheet_id, notesheet_number, subject, received_date, current_status
+        FROM notesheets
+        WHERE current_holder = ?
+        ORDER BY received_date DESC
+        LIMIT 5
+    ''', (current_user.id,))
+    recent_notesheets = cursor.fetchall()
+    columns = [desc[0] for desc in cursor.description]
+    recent_notesheets = [dict(zip(columns, row)) for row in recent_notesheets]
+    
+    # Get recent bills (last 5)
+    cursor.execute('''
+        SELECT bill_id, bill_number, vendor_name, bill_amount, payment_status
+        FROM bills
+        WHERE current_holder = ?
+        ORDER BY received_date DESC
+        LIMIT 5
+    ''', (current_user.id,))
+    recent_bills = cursor.fetchall()
+    columns = [desc[0] for desc in cursor.description]
+    recent_bills = [dict(zip(columns, row)) for row in recent_bills]
+    
     db.close()
     
     stats = {
-        'total_notesheets': total_notesheets,
-        'pending_notesheets': pending_notesheets,
-        'total_bills': total_bills,
-        'pending_bills': pending_bills,
+        'total_notesheets': my_notesheets,
+        'pending_notesheets': my_pending_notesheets,
+        'total_bills': my_bills,
+        'pending_bills': my_pending_bills,
         'my_pending_items': my_pending_items,
         'parked_items': parked_count
     }
     
-    return render_template('dashboard.html', stats=stats)
+    return render_template('dashboard.html', 
+                         stats=stats, 
+                         recent_notesheets=recent_notesheets,
+                         recent_bills=recent_bills)
+
+@app.route('/my-notesheets')
+@login_required
+def my_notesheets():
+    """Show notesheets assigned to current user"""
+    db = WBSEDCLDatabase()
+    conn = db.connect()
+    cursor = conn.cursor()
+    
+    # Get notesheets where current user is the holder
+    cursor.execute('''
+        SELECT 
+            n.notesheet_id, n.notesheet_number, n.subject, n.sender_name,
+            n.received_date, n.current_status, n.priority, n.is_parked,
+            u.full_name as current_holder_name,
+            s.section_name as current_section_name
+        FROM notesheets n
+        LEFT JOIN users u ON n.current_holder = u.user_id
+        LEFT JOIN sections s ON n.current_section_id = s.section_id
+        WHERE n.current_holder = ?
+        ORDER BY n.received_date DESC
+    ''', (current_user.id,))
+    
+    notesheets = cursor.fetchall()
+    
+    # Convert to list of dicts
+    columns = [desc[0] for desc in cursor.description]
+    notesheets = [dict(zip(columns, row)) for row in notesheets]
+    
+    db.close()
+    
+    return render_template('notesheets/list.html', notesheets=notesheets, filter_type='my')
+
+@app.route('/my-bills')
+@login_required
+def my_bills():
+    """Show bills assigned to current user"""
+    db = WBSEDCLDatabase()
+    conn = db.connect()
+    cursor = conn.cursor()
+    
+    # Get bills where current user is the holder
+    cursor.execute('''
+        SELECT 
+            b.bill_id, b.bill_number, b.invoice_number, b.vendor_name,
+            b.bill_amount, b.received_date, b.current_status, b.payment_status, b.priority,
+            u.full_name as current_holder_name,
+            s.section_name as current_section_name
+        FROM bills b
+        LEFT JOIN users u ON b.current_holder = u.user_id
+        LEFT JOIN sections s ON b.current_section_id = s.section_id
+        WHERE b.current_holder = ?
+        ORDER BY b.received_date DESC
+    ''', (current_user.id,))
+    
+    bills = cursor.fetchall()
+    
+    # Convert to list of dicts
+    columns = [desc[0] for desc in cursor.description]
+    bills = [dict(zip(columns, row)) for row in bills]
+    
+    db.close()
+    
+    return render_template('bills/list.html', bills=bills, filter_type='my')
 
 # Notesheet routes
 
@@ -331,6 +449,19 @@ def notesheet_detail(notesheet_id):
     # Convert to dict
     columns = [desc[0] for desc in cursor.description]
     notesheet = dict(zip(columns, notesheet))
+    
+    # === COMPREHENSIVE DEBUG ===
+    print("=" * 80)
+    print(f"NOTESHEET #{notesheet_id} DETAIL - COMPREHENSIVE DEBUG")
+    print("=" * 80)
+    print(f"Current User: ID={current_user.id}, Username={current_user.username}")
+    print(f"Current User Section ID: {current_user.section_id}")
+    print(f"Is Section Head: {current_user.is_section_head()}")
+    print(f"Is Receive Section: {current_user.is_receive_section()}")
+    print(f"Is Superuser: {current_user.is_superuser}")
+    print(f"Notesheet Current Holder: {notesheet['current_holder']}")
+    print(f"Holder matches current user: {notesheet['current_holder'] == current_user.id}")
+    print("=" * 80)
     
     # Get movement history with section info (newest first - DESC)
     cursor.execute('''
@@ -468,21 +599,56 @@ def notesheet_detail(notesheet_id):
         
     elif current_user.is_section_head() and notesheet['current_holder'] == current_user.id:
         # Section heads can forward if they are the current holder
-        # Can forward to users in their section (excluding themselves and superusers)
+        # Can forward to:
+        # 1. Users in their own section (excluding themselves)
+        # 2. Other section heads
+        # 3. Receive section users
         can_forward = True
+        
+        print(f"DEBUG NOTESHEET: User ID={current_user.id}, Section ID={current_user.section_id}")
+        
         cursor.execute('''
-            SELECT u.user_id, u.full_name, u.designation, s.section_name, u.section_id
+            SELECT DISTINCT u.user_id, u.full_name, u.designation, s.section_name, u.section_id
             FROM users u
             LEFT JOIN sections s ON u.section_id = s.section_id
+            LEFT JOIN user_role_mapping urm ON u.user_id = urm.user_id
+            LEFT JOIN user_roles ur ON urm.role_id = ur.role_id
             WHERE u.is_active = 1 
-            AND u.section_id = ? 
             AND u.user_id != ?
             AND u.is_superuser = 0
-            ORDER BY u.full_name
-        ''', (current_user.section_id, current_user.id))
+            AND (
+                u.section_id = ?
+                OR ur.role_name = 'section_head'
+                OR ur.role_name = 'receive_section'
+            )
+            ORDER BY s.section_name, u.full_name
+        ''', (current_user.id, current_user.section_id))
+        
+        test_users = cursor.fetchall()
+        print(f"DEBUG NOTESHEET: Query returned {len(test_users)} users")
+        for usr in test_users:
+            print(f"DEBUG NOTESHEET:   {usr}")
+        
+        # Reset cursor for actual use
+        cursor.execute('''
+            SELECT DISTINCT u.user_id, u.full_name, u.designation, s.section_name, u.section_id
+            FROM users u
+            LEFT JOIN sections s ON u.section_id = s.section_id
+            LEFT JOIN user_role_mapping urm ON u.user_id = urm.user_id
+            LEFT JOIN user_roles ur ON urm.role_id = ur.role_id
+            WHERE u.is_active = 1 
+            AND u.user_id != ?
+            AND u.is_superuser = 0
+            AND (
+                u.section_id = ?
+                OR ur.role_name = 'section_head'
+                OR ur.role_name = 'receive_section'
+            )
+            ORDER BY s.section_name, u.full_name
+        ''', (current_user.id, current_user.section_id))
         
     elif notesheet['current_holder'] == current_user.id:
-        # Regular users can return to receive section if they are the current holder
+        # Sectional users (section_member) can forward to their section head
         can_forward = True
         cursor.execute('''
             SELECT u.user_id, u.full_name, u.designation, s.section_name, u.section_id
@@ -491,15 +657,23 @@ def notesheet_detail(notesheet_id):
             LEFT JOIN user_role_mapping urm ON u.user_id = urm.user_id
             LEFT JOIN user_roles ur ON urm.role_id = ur.role_id
             WHERE u.is_active = 1 
-            AND ur.role_name = 'receive_section'
+            AND u.section_id = ?
+            AND ur.role_name = 'section_head'
             AND u.user_id != ?
             AND u.is_superuser = 0
             ORDER BY u.full_name
-        ''', (current_user.id,))
+        ''', (current_user.section_id, current_user.id))
     
     users = cursor.fetchall()
     columns = [desc[0] for desc in cursor.description]
     users = [dict(zip(columns, row)) for row in users]
+    
+    # === FINAL DEBUG: Users being sent to template ===
+    print(f"\n>>> FINAL NOTESHEET: Sending {len(users)} users to template")
+    for user in users:
+        print(f"    User ID={user['user_id']}, Name={user['full_name']}, Section={user.get('section_name', 'N/A')}")
+    print(f">>> can_forward={can_forward}")
+    print("=" * 80 + "\n")
     
     db.close()
     
@@ -877,21 +1051,56 @@ def bill_detail(bill_id):
         
     elif current_user.is_section_head() and bill['current_holder'] == current_user.id:
         # Section heads can forward if they are the current holder
-        # Can forward to users in their section (excluding themselves and superusers)
+        # Can forward to:
+        # 1. Users in their own section (excluding themselves)
+        # 2. Other section heads
+        # 3. Receive section users
         can_forward = True
+        
+        print(f"DEBUG BILL: User ID={current_user.id}, Section ID={current_user.section_id}")
+        
         cursor.execute('''
-            SELECT u.user_id, u.full_name, u.designation, s.section_name, u.section_id
+            SELECT DISTINCT u.user_id, u.full_name, u.designation, s.section_name, u.section_id
             FROM users u
             LEFT JOIN sections s ON u.section_id = s.section_id
+            LEFT JOIN user_role_mapping urm ON u.user_id = urm.user_id
+            LEFT JOIN user_roles ur ON urm.role_id = ur.role_id
             WHERE u.is_active = 1 
-            AND u.section_id = ? 
             AND u.user_id != ?
             AND u.is_superuser = 0
-            ORDER BY u.full_name
-        ''', (current_user.section_id, current_user.id))
+            AND (
+                u.section_id = ?
+                OR ur.role_name = 'section_head'
+                OR ur.role_name = 'receive_section'
+            )
+            ORDER BY s.section_name, u.full_name
+        ''', (current_user.id, current_user.section_id))
+        
+        test_users = cursor.fetchall()
+        print(f"DEBUG BILL: Query returned {len(test_users)} users")
+        for usr in test_users:
+            print(f"DEBUG BILL:   {usr}")
+        
+        # Reset cursor for actual use
+        cursor.execute('''
+            SELECT DISTINCT u.user_id, u.full_name, u.designation, s.section_name, u.section_id
+            FROM users u
+            LEFT JOIN sections s ON u.section_id = s.section_id
+            LEFT JOIN user_role_mapping urm ON u.user_id = urm.user_id
+            LEFT JOIN user_roles ur ON urm.role_id = ur.role_id
+            WHERE u.is_active = 1 
+            AND u.user_id != ?
+            AND u.is_superuser = 0
+            AND (
+                u.section_id = ?
+                OR ur.role_name = 'section_head'
+                OR ur.role_name = 'receive_section'
+            )
+            ORDER BY s.section_name, u.full_name
+        ''', (current_user.id, current_user.section_id))
         
     elif bill['current_holder'] == current_user.id:
-        # Regular users can return to receive section if they are the current holder
+        # Sectional users (section_member) can forward to their section head
         can_forward = True
         cursor.execute('''
             SELECT u.user_id, u.full_name, u.designation, s.section_name, u.section_id
@@ -900,11 +1109,12 @@ def bill_detail(bill_id):
             LEFT JOIN user_role_mapping urm ON u.user_id = urm.user_id
             LEFT JOIN user_roles ur ON urm.role_id = ur.role_id
             WHERE u.is_active = 1 
-            AND ur.role_name = 'receive_section'
+            AND u.section_id = ?
+            AND ur.role_name = 'section_head'
             AND u.user_id != ?
             AND u.is_superuser = 0
             ORDER BY u.full_name
-        ''', (current_user.id,))
+        ''', (current_user.section_id, current_user.id))
     
     users = cursor.fetchall()
     columns = [desc[0] for desc in cursor.description]
@@ -1215,6 +1425,143 @@ def api_toggle_user_status(user_id):
         
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/admin/users/<int:user_id>/edit', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def edit_user(user_id):
+    """Edit user - superuser only"""
+    db = WBSEDCLDatabase()
+    conn = db.connect()
+    cursor = conn.cursor()
+    
+    if request.method == 'POST':
+        # Get form data
+        username = request.form.get('username')
+        full_name = request.form.get('full_name')
+        email = request.form.get('email')
+        phone = request.form.get('phone')
+        section_id = request.form.get('section_id')
+        designation = request.form.get('designation')
+        new_password = request.form.get('new_password')
+        is_active = 1 if request.form.get('is_active') else 0
+        is_superuser = 1 if request.form.get('is_superuser') else 0
+        roles = request.form.getlist('roles')
+        
+        # Validation
+        if not username or not full_name or not section_id:
+            flash('Username, Full Name, and Section are required.', 'error')
+            return redirect(url_for('edit_user', user_id=user_id))
+        
+        if not roles:
+            flash('At least one role must be selected.', 'error')
+            return redirect(url_for('edit_user', user_id=user_id))
+        
+        # Check if username already exists (for other users)
+        cursor.execute('SELECT user_id FROM users WHERE username = ? AND user_id != ?', (username, user_id))
+        if cursor.fetchone():
+            flash(f'Username "{username}" is already taken.', 'error')
+            return redirect(url_for('edit_user', user_id=user_id))
+        
+        # Prevent removing own superuser status
+        if user_id == current_user.id and not is_superuser:
+            flash('You cannot remove your own superuser status.', 'error')
+            return redirect(url_for('edit_user', user_id=user_id))
+        
+        # Update user
+        if new_password:
+            # Hash the password
+            import hashlib
+            password_hash = hashlib.sha256(new_password.encode()).hexdigest()
+            cursor.execute('''
+                UPDATE users SET
+                    username = ?,
+                    password_hash = ?,
+                    full_name = ?,
+                    email = ?,
+                    phone = ?,
+                    section_id = ?,
+                    designation = ?,
+                    is_active = ?,
+                    is_superuser = ?
+                WHERE user_id = ?
+            ''', (username, password_hash, full_name, email, phone, section_id, designation, is_active, is_superuser, user_id))
+        else:
+            cursor.execute('''
+                UPDATE users SET
+                    username = ?,
+                    full_name = ?,
+                    email = ?,
+                    phone = ?,
+                    section_id = ?,
+                    designation = ?,
+                    is_active = ?,
+                    is_superuser = ?
+                WHERE user_id = ?
+            ''', (username, full_name, email, phone, section_id, designation, is_active, is_superuser, user_id))
+        
+        # Update roles - delete old mappings and add new ones
+        cursor.execute('DELETE FROM user_role_mapping WHERE user_id = ?', (user_id,))
+        for role_id in roles:
+            cursor.execute('''
+                INSERT INTO user_role_mapping (user_id, role_id, assigned_by, assigned_at)
+                VALUES (?, ?, ?, datetime('now'))
+            ''', (user_id, int(role_id), current_user.id))
+        
+        conn.commit()
+        
+        # Log activity
+        db.log_activity(
+            current_user.id,
+            'user_updated',
+            f"Updated user: {username} (ID: {user_id})",
+            request.remote_addr
+        )
+        
+        db.close()
+        flash(f"User '{username}' updated successfully!", 'success')
+        return redirect(url_for('admin_users'))
+    
+    # GET - show form
+    cursor.execute('''
+        SELECT 
+            u.user_id, u.username, u.full_name, u.email, u.phone,
+            u.section_id, s.section_name, u.designation, 
+            u.is_active, u.is_superuser, u.last_login,
+            GROUP_CONCAT(ur.role_name) as roles
+        FROM users u
+        LEFT JOIN sections s ON u.section_id = s.section_id
+        LEFT JOIN user_role_mapping urm ON u.user_id = urm.user_id
+        LEFT JOIN user_roles ur ON urm.role_id = ur.role_id
+        WHERE u.user_id = ?
+        GROUP BY u.user_id
+    ''', (user_id,))
+    
+    user = cursor.fetchone()
+    
+    if not user:
+        db.close()
+        flash('User not found.', 'error')
+        return redirect(url_for('admin_users'))
+    
+    columns = [desc[0] for desc in cursor.description]
+    user = dict(zip(columns, user))
+    
+    # Get all sections
+    sections = db.get_all_sections()
+    
+    # Get all roles
+    cursor.execute('SELECT * FROM user_roles ORDER BY role_id')
+    all_roles = cursor.fetchall()
+    columns = [desc[0] for desc in cursor.description]
+    all_roles = [dict(zip(columns, row)) for row in all_roles]
+    
+    db.close()
+    
+    return render_template('admin/edit_user.html', 
+                         user=user, 
+                         sections=sections, 
+                         all_roles=all_roles)
 
 # SUPERUSER EDIT ROUTES - INSERT BEFORE "# Error handlers" (line 1133)
 
