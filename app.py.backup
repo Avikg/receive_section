@@ -356,21 +356,33 @@ def notesheet_detail(notesheet_id):
     columns = [desc[0] for desc in cursor.description]
     movements = [dict(zip(columns, row)) for row in movements]
     
-    # Calculate days held - CORRECTED
-    # movements[0] = newest (current), movements[-1] = oldest (initial receipt)
+    # Calculate days held at each stage (process in reverse since we're showing newest first)
     from datetime import datetime as dt
     for i, movement in enumerate(movements):
+        # Use date-only for display
         movement['display_date'] = movement['forward_date_only']
         
-        if i == 0:
-            # Current/newest location - still here
+        if i < len(movements) - 1:
+            # Not the oldest movement - calculate days until previous movement
             try:
-                in_date = dt.strptime(movement['forward_date_only'], '%Y-%m-%d').date()
-                today = dt.now().date()
-                days_diff = (today - in_date).days
+                current_date = dt.strptime(movement['forward_date_only'], '%Y-%m-%d').date()
+                next_date = dt.strptime(movements[i + 1]['forward_date_only'], '%Y-%m-%d').date()
+                days_diff = (current_date - next_date).days
                 
-                movement['in_date'] = movement['forward_date_only']
-                movement['out_date'] = 'Present'
+                if days_diff == 0:
+                    movement['time_held'] = "Same day"
+                elif days_diff == 1:
+                    movement['time_held'] = "1 day"
+                else:
+                    movement['time_held'] = f"{days_diff} days"
+            except Exception as e:
+                movement['time_held'] = "Unknown"
+        else:
+            # Oldest movement (first receipt) - calculate days from receipt to now
+            try:
+                receipt_date = dt.strptime(movement['forward_date_only'], '%Y-%m-%d').date()
+                today = dt.now().date()
+                days_diff = (today - receipt_date).days
                 
                 if days_diff == 0:
                     movement['time_held'] = "Today (current)"
@@ -378,69 +390,8 @@ def notesheet_detail(notesheet_id):
                     movement['time_held'] = "1 day (current)"
                 else:
                     movement['time_held'] = f"{days_diff} days (current)"
-            except:
+            except Exception as e:
                 movement['time_held'] = "Unknown (current)"
-        elif i == len(movements) - 1:
-            # Oldest movement (initial receipt) - always calculate OUT to next movement
-            movement['in_date'] = movement['forward_date_only']
-            if len(movements) > 1:
-                # There IS a next movement - calculate OUT date
-                try:
-                    in_date_str = movement['forward_date_only']
-                    out_date_str = movements[i-1]['forward_date_only']
-                    
-                    # Handle None values
-                    if not in_date_str or not out_date_str:
-                        movement['out_date'] = 'N/A'
-                        movement['time_held'] = "Missing date"
-                    else:
-                        in_date = dt.strptime(str(in_date_str), '%Y-%m-%d').date()
-                        out_date = dt.strptime(str(out_date_str), '%Y-%m-%d').date()
-                        days_diff = (out_date - in_date).days
-                        
-                        movement['out_date'] = out_date_str
-                        
-                        if days_diff < 0:
-                            movement['time_held'] = f"{abs(days_diff)} days (ERROR: OUT before IN)"
-                        elif days_diff == 0:
-                            movement['time_held'] = "Same day"
-                        elif days_diff == 1:
-                            movement['time_held'] = "1 day"
-                        else:
-                            movement['time_held'] = f"{days_diff} days"
-                except Exception as e:
-                    # Even on error, set OUT date if available
-                    if i > 0 and movements[i-1].get('forward_date_only'):
-                        movement['out_date'] = movements[i-1]['forward_date_only']
-                    else:
-                        movement['out_date'] = 'N/A'
-                    movement['time_held'] = f"Error: {str(e)[:30]}"
-            else:
-                # Only one movement - still at initial receipt
-                movement['out_date'] = 'Present'
-                movement['time_held'] = "Still here (current)"
-        else:
-            # Middle movements - calculate time from IN to next movement
-            try:
-                in_date = dt.strptime(movement['forward_date_only'], '%Y-%m-%d').date()
-                out_date = dt.strptime(movements[i-1]['forward_date_only'], '%Y-%m-%d').date()
-                days_diff = (out_date - in_date).days
-                
-                movement['in_date'] = movement['forward_date_only']
-                movement['out_date'] = movements[i-1]['forward_date_only']
-                
-                if days_diff < 0:
-                    # Negative days - data issue, don't show OUT
-                    movement['out_date'] = 'N/A'
-                    movement['time_held'] = "Data error"
-                elif days_diff == 0:
-                    movement['time_held'] = "Same day"
-                elif days_diff == 1:
-                    movement['time_held'] = "1 day"
-                else:
-                    movement['time_held'] = f"{days_diff} days"
-            except:
-                movement['time_held'] = "Unknown"
     
     # Get sections for forwarding dropdown
     sections = db.get_all_sections()
@@ -765,21 +716,33 @@ def bill_detail(bill_id):
     columns = [desc[0] for desc in cursor.description]
     movements = [dict(zip(columns, row)) for row in movements]
     
-    # Calculate days held - CORRECTED
-    # movements[0] = newest (current), movements[-1] = oldest (initial receipt)
+    # Calculate days held at each stage (process in reverse since we're showing newest first)
     from datetime import datetime as dt
     for i, movement in enumerate(movements):
+        # Use date-only for display
         movement['display_date'] = movement['forward_date_only']
         
-        if i == 0:
-            # Current/newest location - still here
+        if i < len(movements) - 1:
+            # Not the oldest movement - calculate days until previous movement
             try:
-                in_date = dt.strptime(movement['forward_date_only'], '%Y-%m-%d').date()
-                today = dt.now().date()
-                days_diff = (today - in_date).days
+                current_date = dt.strptime(movement['forward_date_only'], '%Y-%m-%d').date()
+                next_date = dt.strptime(movements[i + 1]['forward_date_only'], '%Y-%m-%d').date()
+                days_diff = (current_date - next_date).days
                 
-                movement['in_date'] = movement['forward_date_only']
-                movement['out_date'] = 'Present'
+                if days_diff == 0:
+                    movement['time_held'] = "Same day"
+                elif days_diff == 1:
+                    movement['time_held'] = "1 day"
+                else:
+                    movement['time_held'] = f"{days_diff} days"
+            except Exception as e:
+                movement['time_held'] = "Unknown"
+        else:
+            # Oldest movement (first receipt) - calculate days from receipt to now
+            try:
+                receipt_date = dt.strptime(movement['forward_date_only'], '%Y-%m-%d').date()
+                today = dt.now().date()
+                days_diff = (today - receipt_date).days
                 
                 if days_diff == 0:
                     movement['time_held'] = "Today (current)"
@@ -787,69 +750,8 @@ def bill_detail(bill_id):
                     movement['time_held'] = "1 day (current)"
                 else:
                     movement['time_held'] = f"{days_diff} days (current)"
-            except:
+            except Exception as e:
                 movement['time_held'] = "Unknown (current)"
-        elif i == len(movements) - 1:
-            # Oldest movement (initial receipt) - always calculate OUT to next movement
-            movement['in_date'] = movement['forward_date_only']
-            if len(movements) > 1:
-                # There IS a next movement - calculate OUT date
-                try:
-                    in_date_str = movement['forward_date_only']
-                    out_date_str = movements[i-1]['forward_date_only']
-                    
-                    # Handle None values
-                    if not in_date_str or not out_date_str:
-                        movement['out_date'] = 'N/A'
-                        movement['time_held'] = "Missing date"
-                    else:
-                        in_date = dt.strptime(str(in_date_str), '%Y-%m-%d').date()
-                        out_date = dt.strptime(str(out_date_str), '%Y-%m-%d').date()
-                        days_diff = (out_date - in_date).days
-                        
-                        movement['out_date'] = out_date_str
-                        
-                        if days_diff < 0:
-                            movement['time_held'] = f"{abs(days_diff)} days (ERROR: OUT before IN)"
-                        elif days_diff == 0:
-                            movement['time_held'] = "Same day"
-                        elif days_diff == 1:
-                            movement['time_held'] = "1 day"
-                        else:
-                            movement['time_held'] = f"{days_diff} days"
-                except Exception as e:
-                    # Even on error, set OUT date if available
-                    if i > 0 and movements[i-1].get('forward_date_only'):
-                        movement['out_date'] = movements[i-1]['forward_date_only']
-                    else:
-                        movement['out_date'] = 'N/A'
-                    movement['time_held'] = f"Error: {str(e)[:30]}"
-            else:
-                # Only one movement - still at initial receipt
-                movement['out_date'] = 'Present'
-                movement['time_held'] = "Still here (current)"
-        else:
-            # Middle movements - calculate time from IN to next movement
-            try:
-                in_date = dt.strptime(movement['forward_date_only'], '%Y-%m-%d').date()
-                out_date = dt.strptime(movements[i-1]['forward_date_only'], '%Y-%m-%d').date()
-                days_diff = (out_date - in_date).days
-                
-                movement['in_date'] = movement['forward_date_only']
-                movement['out_date'] = movements[i-1]['forward_date_only']
-                
-                if days_diff < 0:
-                    # Negative days - data issue, don't show OUT
-                    movement['out_date'] = 'N/A'
-                    movement['time_held'] = "Data error"
-                elif days_diff == 0:
-                    movement['time_held'] = "Same day"
-                elif days_diff == 1:
-                    movement['time_held'] = "1 day"
-                else:
-                    movement['time_held'] = f"{days_diff} days"
-            except:
-                movement['time_held'] = "Unknown"
     
     # Get sections for forwarding dropdown
     sections = db.get_all_sections()
@@ -936,7 +838,7 @@ def receive_bill():
             'vendor_pan': request.form.get('vendor_pan'),
             'bill_date': request.form.get('bill_date'),
             'received_date': request.form.get('received_date'),
-            'bill_amount': float(request.form.get('bill_amount') or 0) if request.form.get('bill_amount') else 0.0,
+            'bill_amount': float(request.form.get('bill_amount', 0)),
             'taxable_amount': float(request.form.get('taxable_amount') or 0) if request.form.get('taxable_amount') else None,
             'gst_amount': float(request.form.get('gst_amount') or 0) if request.form.get('gst_amount') else None,
             'tds_amount': float(request.form.get('tds_amount') or 0) if request.form.get('tds_amount') else None,
@@ -1215,325 +1117,6 @@ def api_toggle_user_status(user_id):
         
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
-
-# SUPERUSER EDIT ROUTES - INSERT BEFORE "# Error handlers" (line 1133)
-
-# Notesheet Edit Routes
-@app.route('/notesheets/<int:notesheet_id>/edit', methods=['GET', 'POST'])
-@login_required
-@admin_required
-def edit_notesheet(notesheet_id):
-    """Edit notesheet - superuser only"""
-    db = WBSEDCLDatabase()
-    conn = db.connect()
-    cursor = conn.cursor()
-    
-    if request.method == 'POST':
-        # Update notesheet
-        cursor.execute('''
-            UPDATE notesheets SET
-                notesheet_number = ?,
-                subject = ?,
-                sender_name = ?,
-                sender_organization = ?,
-                sender_address = ?,
-                reference_number = ?,
-                received_date = ?,
-                category = ?,
-                priority = ?,
-                remarks = ?
-            WHERE notesheet_id = ?
-        ''', (
-            request.form.get('notesheet_number'),
-            request.form.get('subject'),
-            request.form.get('sender_name'),
-            request.form.get('sender_organization'),
-            request.form.get('sender_address'),
-            request.form.get('reference_number'),
-            request.form.get('received_date'),
-            request.form.get('category'),
-            request.form.get('priority'),
-            request.form.get('remarks'),
-            notesheet_id
-        ))
-        conn.commit()
-        
-        db.log_activity(current_user.id, 'notesheet_edited',
-                       f"Edited notesheet ID {notesheet_id}",
-                       request.remote_addr)
-        
-        db.close()
-        flash('Notesheet updated successfully!', 'success')
-        return redirect(url_for('notesheet_detail', notesheet_id=notesheet_id))
-    
-    # GET - show form
-    cursor.execute('SELECT * FROM notesheets WHERE notesheet_id = ?', (notesheet_id,))
-    notesheet = cursor.fetchone()
-    
-    if not notesheet:
-        db.close()
-        flash('Notesheet not found.', 'error')
-        return redirect(url_for('notesheets_list'))
-    
-    columns = [desc[0] for desc in cursor.description]
-    notesheet = dict(zip(columns, notesheet))
-    
-    db.close()
-    return render_template('notesheets/edit.html', notesheet=notesheet)
-
-@app.route('/movements/notesheet/<int:movement_id>/edit', methods=['GET', 'POST'])
-@login_required
-@admin_required
-def edit_notesheet_movement(movement_id):
-    """Edit notesheet movement - superuser only"""
-    db = WBSEDCLDatabase()
-    conn = db.connect()
-    cursor = conn.cursor()
-    
-    if request.method == 'POST':
-        cursor.execute('''
-            UPDATE notesheet_movements SET
-                forwarded_date = ?,
-                comments = ?
-            WHERE movement_id = ?
-        ''', (
-            request.form.get('forwarded_date'),
-            request.form.get('comments'),
-            movement_id
-        ))
-        conn.commit()
-        
-        cursor.execute('SELECT notesheet_id FROM notesheet_movements WHERE movement_id = ?', (movement_id,))
-        notesheet_id = cursor.fetchone()[0]
-        
-        db.log_activity(current_user.id, 'movement_edited',
-                       f"Edited notesheet movement ID {movement_id}",
-                       request.remote_addr)
-        
-        db.close()
-        flash('Movement updated successfully!', 'success')
-        return redirect(url_for('notesheet_detail', notesheet_id=notesheet_id))
-    
-    # GET - show form
-    cursor.execute('''
-        SELECT nm.*, n.notesheet_number
-        FROM notesheet_movements nm
-        JOIN notesheets n ON nm.notesheet_id = n.notesheet_id
-        WHERE nm.movement_id = ?
-    ''', (movement_id,))
-    movement = cursor.fetchone()
-    
-    if not movement:
-        db.close()
-        flash('Movement not found.', 'error')
-        return redirect(url_for('notesheets_list'))
-    
-    columns = [desc[0] for desc in cursor.description]
-    movement = dict(zip(columns, movement))
-    
-    db.close()
-    return render_template('notesheets/edit_movement.html', movement=movement)
-
-@app.route('/movements/notesheet/<int:movement_id>/delete', methods=['POST'])
-@login_required
-@admin_required
-def delete_notesheet_movement(movement_id):
-    """Delete notesheet movement - superuser only"""
-    db = WBSEDCLDatabase()
-    conn = db.connect()
-    cursor = conn.cursor()
-    
-    # Get notesheet_id before deleting
-    cursor.execute('SELECT notesheet_id FROM notesheet_movements WHERE movement_id = ?', (movement_id,))
-    result = cursor.fetchone()
-    
-    if not result:
-        db.close()
-        flash('Movement not found.', 'error')
-        return redirect(url_for('notesheets_list'))
-    
-    notesheet_id = result[0]
-    
-    # Delete the movement
-    cursor.execute('DELETE FROM notesheet_movements WHERE movement_id = ?', (movement_id,))
-    conn.commit()
-    
-    db.log_activity(current_user.id, 'movement_deleted',
-                   f"Deleted notesheet movement ID {movement_id}",
-                   request.remote_addr)
-    
-    db.close()
-    flash('Movement deleted successfully!', 'success')
-    return redirect(url_for('notesheet_detail', notesheet_id=notesheet_id))
-
-# Bill Edit Routes
-@app.route('/bills/<int:bill_id>/edit', methods=['GET', 'POST'])
-@login_required
-@admin_required
-def edit_bill(bill_id):
-    """Edit bill - superuser only"""
-    db = WBSEDCLDatabase()
-    conn = db.connect()
-    cursor = conn.cursor()
-    
-    if request.method == 'POST':
-        # Get bill_amount, default to 0 if not provided
-        bill_amount_str = request.form.get('bill_amount')
-        bill_amount = float(bill_amount_str) if bill_amount_str else 0.0
-        
-        # Update bill
-        cursor.execute('''
-            UPDATE bills SET
-                bill_number = ?,
-                invoice_number = ?,
-                vendor_name = ?,
-                vendor_address = ?,
-                vendor_gstin = ?,
-                vendor_pan = ?,
-                bill_date = ?,
-                received_date = ?,
-                bill_amount = ?,
-                taxable_amount = ?,
-                gst_amount = ?,
-                tds_amount = ?,
-                net_payable_amount = ?,
-                bill_type = ?,
-                category = ?,
-                priority = ?,
-                description = ?,
-                remarks = ?
-            WHERE bill_id = ?
-        ''', (
-            request.form.get('bill_number'),
-            request.form.get('invoice_number'),
-            request.form.get('vendor_name'),
-            request.form.get('vendor_address'),
-            request.form.get('vendor_gstin'),
-            request.form.get('vendor_pan'),
-            request.form.get('bill_date'),
-            request.form.get('received_date'),
-            bill_amount,
-            float(request.form.get('taxable_amount') or 0) if request.form.get('taxable_amount') else None,
-            float(request.form.get('gst_amount') or 0) if request.form.get('gst_amount') else None,
-            float(request.form.get('tds_amount') or 0) if request.form.get('tds_amount') else None,
-            float(request.form.get('net_payable_amount') or 0) if request.form.get('net_payable_amount') else None,
-            request.form.get('bill_type'),
-            request.form.get('category'),
-            request.form.get('priority'),
-            request.form.get('description'),
-            request.form.get('remarks'),
-            bill_id
-        ))
-        conn.commit()
-        
-        db.log_activity(current_user.id, 'bill_edited',
-                       f"Edited bill ID {bill_id}",
-                       request.remote_addr)
-        
-        db.close()
-        flash('Bill updated successfully!', 'success')
-        return redirect(url_for('bill_detail', bill_id=bill_id))
-    
-    # GET - show form
-    cursor.execute('SELECT * FROM bills WHERE bill_id = ?', (bill_id,))
-    bill = cursor.fetchone()
-    
-    if not bill:
-        db.close()
-        flash('Bill not found.', 'error')
-        return redirect(url_for('bills_list'))
-    
-    columns = [desc[0] for desc in cursor.description]
-    bill = dict(zip(columns, bill))
-    
-    db.close()
-    return render_template('bills/edit.html', bill=bill)
-
-@app.route('/movements/bill/<int:movement_id>/edit', methods=['GET', 'POST'])
-@login_required
-@admin_required
-def edit_bill_movement(movement_id):
-    """Edit bill movement - superuser only"""
-    db = WBSEDCLDatabase()
-    conn = db.connect()
-    cursor = conn.cursor()
-    
-    if request.method == 'POST':
-        cursor.execute('''
-            UPDATE bill_movements SET
-                forwarded_date = ?,
-                comments = ?
-            WHERE movement_id = ?
-        ''', (
-            request.form.get('forwarded_date'),
-            request.form.get('comments'),
-            movement_id
-        ))
-        conn.commit()
-        
-        cursor.execute('SELECT bill_id FROM bill_movements WHERE movement_id = ?', (movement_id,))
-        bill_id = cursor.fetchone()[0]
-        
-        db.log_activity(current_user.id, 'movement_edited',
-                       f"Edited bill movement ID {movement_id}",
-                       request.remote_addr)
-        
-        db.close()
-        flash('Movement updated successfully!', 'success')
-        return redirect(url_for('bill_detail', bill_id=bill_id))
-    
-    # GET - show form
-    cursor.execute('''
-        SELECT bm.*, b.bill_number
-        FROM bill_movements bm
-        JOIN bills b ON bm.bill_id = b.bill_id
-        WHERE bm.movement_id = ?
-    ''', (movement_id,))
-    movement = cursor.fetchone()
-    
-    if not movement:
-        db.close()
-        flash('Movement not found.', 'error')
-        return redirect(url_for('bills_list'))
-    
-    columns = [desc[0] for desc in cursor.description]
-    movement = dict(zip(columns, movement))
-    
-    db.close()
-    return render_template('bills/edit_movement.html', movement=movement)
-
-@app.route('/movements/bill/<int:movement_id>/delete', methods=['POST'])
-@login_required
-@admin_required
-def delete_bill_movement(movement_id):
-    """Delete bill movement - superuser only"""
-    db = WBSEDCLDatabase()
-    conn = db.connect()
-    cursor = conn.cursor()
-    
-    # Get bill_id before deleting
-    cursor.execute('SELECT bill_id FROM bill_movements WHERE movement_id = ?', (movement_id,))
-    result = cursor.fetchone()
-    
-    if not result:
-        db.close()
-        flash('Movement not found.', 'error')
-        return redirect(url_for('bills_list'))
-    
-    bill_id = result[0]
-    
-    # Delete the movement
-    cursor.execute('DELETE FROM bill_movements WHERE movement_id = ?', (movement_id,))
-    conn.commit()
-    
-    db.log_activity(current_user.id, 'movement_deleted',
-                   f"Deleted bill movement ID {movement_id}",
-                   request.remote_addr)
-    
-    db.close()
-    flash('Movement deleted successfully!', 'success')
-    return redirect(url_for('bill_detail', bill_id=bill_id))
-
 
 # Error handlers
 

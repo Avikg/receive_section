@@ -23,7 +23,7 @@
                             <th>Username</th>
                             <th>Full Name</th>
                             <th>Email</th>
-                            <th>Department</th>
+                            <th>Section</th>
                             <th>Roles</th>
                             <th>Status</th>
                             <th>Last Login</th>
@@ -37,7 +37,7 @@
                             <td><strong>{{ user.username }}</strong></td>
                             <td>{{ user.full_name }}</td>
                             <td>{{ user.email or 'N/A' }}</td>
-                            <td>{{ user.department or 'N/A' }}</td>
+                            <td>{{ user.section_name or 'N/A' }}</td>
                             <td>
                                 {% if user.is_superuser %}
                                 <span class="badge bg-danger">Superuser</span>
@@ -145,23 +145,35 @@
                     </div>
                     
                     <div class="mb-3">
-                        <label for="department" class="form-label">Department</label>
-                        <input type="text" class="form-control" id="department" name="department">
+                        <label for="phone" class="form-label">Phone</label>
+                        <input type="text" class="form-control" id="phone" name="phone">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="section_id" class="form-label">Section *</label>
+                        <select class="form-select" id="section_id" name="section_id" required>
+                            <option value="">Select Section</option>
+                            {% for section in sections %}
+                            <option value="{{ section.section_id }}">{{ section.section_name }}</option>
+                            {% endfor %}
+                        </select>
                     </div>
                     
                     <div class="mb-3">
                         <label for="designation" class="form-label">Designation</label>
-                        <input type="text" class="form-control" id="designation" name="designation">
+                        <input type="text" class="form-control" id="designation" name="designation" placeholder="e.g., Assistant Manager, Clerk">
                     </div>
                     
                     <div class="mb-3">
-                        <label class="form-label">Roles</label>
+                        <label class="form-label">Roles *</label>
+                        <small class="text-muted d-block mb-2">Select at least one role</small>
                         {% for role in roles %}
                         {% if role.role_name != 'superuser' %}
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" name="roles" value="{{ role.role_id }}" id="role_{{ role.role_id }}">
                             <label class="form-check-label" for="role_{{ role.role_id }}">
-                                {{ role.role_name }}
+                                <strong>{{ role.role_name }}</strong>
+                                <small class="text-muted d-block">{{ role.role_description }}</small>
                             </label>
                         </div>
                         {% endif %}
@@ -218,7 +230,8 @@ function createUser() {
         password: formData.get('password'),
         full_name: formData.get('full_name'),
         email: formData.get('email'),
-        department: formData.get('department'),
+        phone: formData.get('phone'),
+        section_id: formData.get('section_id') ? parseInt(formData.get('section_id')) : null,
         designation: formData.get('designation'),
         roles: roles
     };
@@ -226,6 +239,16 @@ function createUser() {
     // Validate required fields
     if (!data.username || !data.password || !data.full_name) {
         alert('Please fill in all required fields (Username, Password, Full Name)');
+        return;
+    }
+    
+    if (!data.section_id) {
+        alert('Please select a section');
+        return;
+    }
+    
+    if (roles.length === 0) {
+        alert('Please select at least one role');
         return;
     }
     
@@ -279,7 +302,10 @@ function viewUser(userId) {
                         <strong>Email:</strong> ${user.email || 'N/A'}
                     </div>
                     <div class="mb-3">
-                        <strong>Department:</strong> ${user.department || 'N/A'}
+                        <strong>Phone:</strong> ${user.phone || 'N/A'}
+                    </div>
+                    <div class="mb-3">
+                        <strong>Section:</strong> ${user.section_name || 'N/A'}
                     </div>
                     <div class="mb-3">
                         <strong>Designation:</strong> ${user.designation || 'N/A'}

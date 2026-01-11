@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Notesheet - WBSEDCL{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-10">
+            <div class="card">
+                <div class="card-header bg-warning text-dark">
+                    <h4 class="mb-0"><i class="bi bi-pencil-square"></i> Edit Notesheet</h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> <strong>Admin Mode:</strong> You are editing this notesheet. Changes will be logged.
+                    </div>
+                    
+                    <form method="POST" class="needs-validation" novalidate>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="notesheet_number" class="form-label">Notesheet Number *</label>
+                                <input type="text" class="form-control" id="notesheet_number" name="notesheet_number" 
+                                       value="{{ notesheet.notesheet_number }}" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="reference_number" class="form-label">Reference Number</label>
+                                <input type="text" class="form-control" id="reference_number" name="reference_number" 
+                                       value="{{ notesheet.reference_number or '' }}">
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="subject" class="form-label">Subject *</label>
+                            <textarea class="form-control" id="subject" name="subject" rows="2" required>{{ notesheet.subject }}</textarea>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="sender_name" class="form-label">Sender Name *</label>
+                                <input type="text" class="form-control" id="sender_name" name="sender_name" 
+                                       value="{{ notesheet.sender_name }}" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="sender_organization" class="form-label">Sender Organization</label>
+                                <input type="text" class="form-control" id="sender_organization" name="sender_organization" 
+                                       value="{{ notesheet.sender_organization or '' }}">
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="sender_address" class="form-label">Sender Address</label>
+                            <textarea class="form-control" id="sender_address" name="sender_address" rows="2">{{ notesheet.sender_address or '' }}</textarea>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="received_date" class="form-label">Received Date *</label>
+                                <input type="date" class="form-control" id="received_date" name="received_date" 
+                                       value="{{ notesheet.received_date }}" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="category" class="form-label">Category</label>
+                                <select class="form-select" id="category" name="category">
+                                    <option value="">Select Category</option>
+                                    <option value="Administrative" {% if notesheet.category == 'Administrative' %}selected{% endif %}>Administrative</option>
+                                    <option value="Technical" {% if notesheet.category == 'Technical' %}selected{% endif %}>Technical</option>
+                                    <option value="Financial" {% if notesheet.category == 'Financial' %}selected{% endif %}>Financial</option>
+                                    <option value="Legal" {% if notesheet.category == 'Legal' %}selected{% endif %}>Legal</option>
+                                    <option value="Other" {% if notesheet.category == 'Other' %}selected{% endif %}>Other</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="priority" class="form-label">Priority</label>
+                            <select class="form-select" id="priority" name="priority">
+                                <option value="Normal" {% if notesheet.priority == 'Normal' %}selected{% endif %}>Normal</option>
+                                <option value="High" {% if notesheet.priority == 'High' %}selected{% endif %}>High</option>
+                                <option value="Urgent" {% if notesheet.priority == 'Urgent' %}selected{% endif %}>Urgent</option>
+                                <option value="Low" {% if notesheet.priority == 'Low' %}selected{% endif %}>Low</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="remarks" class="form-label">Remarks</label>
+                            <textarea class="form-control" id="remarks" name="remarks" rows="3">{{ notesheet.remarks or '' }}</textarea>
+                        </div>
+                        
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-warning">
+                                <i class="bi bi-save"></i> Save Changes
+                            </button>
+                            <a href="{{ url_for('notesheet_detail', notesheet_id=notesheet.notesheet_id) }}" class="btn btn-secondary">
+                                <i class="bi bi-x-circle"></i> Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Form validation
+(function () {
+    'use strict'
+    var forms = document.querySelectorAll('.needs-validation')
+    Array.prototype.slice.call(forms).forEach(function (form) {
+        form.addEventListener('submit', function (event) {
+            if (!form.checkValidity()) {
+                event.preventDefault()
+                event.stopPropagation()
+            }
+            form.classList.add('was-validated')
+        }, false)
+    })
+})()
+</script>
+{% endblock %}

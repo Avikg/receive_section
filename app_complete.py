@@ -356,14 +356,14 @@ def notesheet_detail(notesheet_id):
     columns = [desc[0] for desc in cursor.description]
     movements = [dict(zip(columns, row)) for row in movements]
     
-    # Calculate days held - CORRECTED
-    # movements[0] = newest (current), movements[-1] = oldest (initial receipt)
+    # Calculate days held at each stage - FIXED CALCULATION
+    # movements[0] = newest (current), movements[-1] = oldest
     from datetime import datetime as dt
     for i, movement in enumerate(movements):
         movement['display_date'] = movement['forward_date_only']
         
         if i == 0:
-            # Current/newest location - still here
+            # Current location - from arrival to now
             try:
                 in_date = dt.strptime(movement['forward_date_only'], '%Y-%m-%d').date()
                 today = dt.now().date()
@@ -380,47 +380,8 @@ def notesheet_detail(notesheet_id):
                     movement['time_held'] = f"{days_diff} days (current)"
             except:
                 movement['time_held'] = "Unknown (current)"
-        elif i == len(movements) - 1:
-            # Oldest movement (initial receipt) - always calculate OUT to next movement
-            movement['in_date'] = movement['forward_date_only']
-            if len(movements) > 1:
-                # There IS a next movement - calculate OUT date
-                try:
-                    in_date_str = movement['forward_date_only']
-                    out_date_str = movements[i-1]['forward_date_only']
-                    
-                    # Handle None values
-                    if not in_date_str or not out_date_str:
-                        movement['out_date'] = 'N/A'
-                        movement['time_held'] = "Missing date"
-                    else:
-                        in_date = dt.strptime(str(in_date_str), '%Y-%m-%d').date()
-                        out_date = dt.strptime(str(out_date_str), '%Y-%m-%d').date()
-                        days_diff = (out_date - in_date).days
-                        
-                        movement['out_date'] = out_date_str
-                        
-                        if days_diff < 0:
-                            movement['time_held'] = f"{abs(days_diff)} days (ERROR: OUT before IN)"
-                        elif days_diff == 0:
-                            movement['time_held'] = "Same day"
-                        elif days_diff == 1:
-                            movement['time_held'] = "1 day"
-                        else:
-                            movement['time_held'] = f"{days_diff} days"
-                except Exception as e:
-                    # Even on error, set OUT date if available
-                    if i > 0 and movements[i-1].get('forward_date_only'):
-                        movement['out_date'] = movements[i-1]['forward_date_only']
-                    else:
-                        movement['out_date'] = 'N/A'
-                    movement['time_held'] = f"Error: {str(e)[:30]}"
-            else:
-                # Only one movement - still at initial receipt
-                movement['out_date'] = 'Present'
-                movement['time_held'] = "Still here (current)"
         else:
-            # Middle movements - calculate time from IN to next movement
+            # Past location - from arrival to departure (next movement)
             try:
                 in_date = dt.strptime(movement['forward_date_only'], '%Y-%m-%d').date()
                 out_date = dt.strptime(movements[i-1]['forward_date_only'], '%Y-%m-%d').date()
@@ -429,11 +390,7 @@ def notesheet_detail(notesheet_id):
                 movement['in_date'] = movement['forward_date_only']
                 movement['out_date'] = movements[i-1]['forward_date_only']
                 
-                if days_diff < 0:
-                    # Negative days - data issue, don't show OUT
-                    movement['out_date'] = 'N/A'
-                    movement['time_held'] = "Data error"
-                elif days_diff == 0:
+                if days_diff == 0:
                     movement['time_held'] = "Same day"
                 elif days_diff == 1:
                     movement['time_held'] = "1 day"
@@ -765,14 +722,14 @@ def bill_detail(bill_id):
     columns = [desc[0] for desc in cursor.description]
     movements = [dict(zip(columns, row)) for row in movements]
     
-    # Calculate days held - CORRECTED
-    # movements[0] = newest (current), movements[-1] = oldest (initial receipt)
+    # Calculate days held at each stage - FIXED CALCULATION
+    # movements[0] = newest (current), movements[-1] = oldest
     from datetime import datetime as dt
     for i, movement in enumerate(movements):
         movement['display_date'] = movement['forward_date_only']
         
         if i == 0:
-            # Current/newest location - still here
+            # Current location - from arrival to now
             try:
                 in_date = dt.strptime(movement['forward_date_only'], '%Y-%m-%d').date()
                 today = dt.now().date()
@@ -789,47 +746,8 @@ def bill_detail(bill_id):
                     movement['time_held'] = f"{days_diff} days (current)"
             except:
                 movement['time_held'] = "Unknown (current)"
-        elif i == len(movements) - 1:
-            # Oldest movement (initial receipt) - always calculate OUT to next movement
-            movement['in_date'] = movement['forward_date_only']
-            if len(movements) > 1:
-                # There IS a next movement - calculate OUT date
-                try:
-                    in_date_str = movement['forward_date_only']
-                    out_date_str = movements[i-1]['forward_date_only']
-                    
-                    # Handle None values
-                    if not in_date_str or not out_date_str:
-                        movement['out_date'] = 'N/A'
-                        movement['time_held'] = "Missing date"
-                    else:
-                        in_date = dt.strptime(str(in_date_str), '%Y-%m-%d').date()
-                        out_date = dt.strptime(str(out_date_str), '%Y-%m-%d').date()
-                        days_diff = (out_date - in_date).days
-                        
-                        movement['out_date'] = out_date_str
-                        
-                        if days_diff < 0:
-                            movement['time_held'] = f"{abs(days_diff)} days (ERROR: OUT before IN)"
-                        elif days_diff == 0:
-                            movement['time_held'] = "Same day"
-                        elif days_diff == 1:
-                            movement['time_held'] = "1 day"
-                        else:
-                            movement['time_held'] = f"{days_diff} days"
-                except Exception as e:
-                    # Even on error, set OUT date if available
-                    if i > 0 and movements[i-1].get('forward_date_only'):
-                        movement['out_date'] = movements[i-1]['forward_date_only']
-                    else:
-                        movement['out_date'] = 'N/A'
-                    movement['time_held'] = f"Error: {str(e)[:30]}"
-            else:
-                # Only one movement - still at initial receipt
-                movement['out_date'] = 'Present'
-                movement['time_held'] = "Still here (current)"
         else:
-            # Middle movements - calculate time from IN to next movement
+            # Past location - from arrival to departure (next movement)
             try:
                 in_date = dt.strptime(movement['forward_date_only'], '%Y-%m-%d').date()
                 out_date = dt.strptime(movements[i-1]['forward_date_only'], '%Y-%m-%d').date()
@@ -838,11 +756,7 @@ def bill_detail(bill_id):
                 movement['in_date'] = movement['forward_date_only']
                 movement['out_date'] = movements[i-1]['forward_date_only']
                 
-                if days_diff < 0:
-                    # Negative days - data issue, don't show OUT
-                    movement['out_date'] = 'N/A'
-                    movement['time_held'] = "Data error"
-                elif days_diff == 0:
+                if days_diff == 0:
                     movement['time_held'] = "Same day"
                 elif days_diff == 1:
                     movement['time_held'] = "1 day"
@@ -936,7 +850,7 @@ def receive_bill():
             'vendor_pan': request.form.get('vendor_pan'),
             'bill_date': request.form.get('bill_date'),
             'received_date': request.form.get('received_date'),
-            'bill_amount': float(request.form.get('bill_amount') or 0) if request.form.get('bill_amount') else 0.0,
+            'bill_amount': float(request.form.get('bill_amount', 0)),
             'taxable_amount': float(request.form.get('taxable_amount') or 0) if request.form.get('taxable_amount') else None,
             'gst_amount': float(request.form.get('gst_amount') or 0) if request.form.get('gst_amount') else None,
             'tds_amount': float(request.form.get('tds_amount') or 0) if request.form.get('tds_amount') else None,
@@ -1556,7 +1470,7 @@ if __name__ == '__main__':
     print("Default login: admin / admin123")
     print("=" * 60)
     app.run(debug=True, host='0.0.0.0', port=5000)
-    print("Access the application at: http://127.0.0.1:5000")
+("Access the application at: http://127.0.0.1:5000")
     print("Default login: admin / admin123")
     print("=" * 60)
     app.run(debug=True, host='0.0.0.0', port=5000)

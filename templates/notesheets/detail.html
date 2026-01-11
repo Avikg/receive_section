@@ -5,15 +5,22 @@
 {% block content %}
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2><i class="bi bi-file-earmark-text"></i> Notesheet Details</h2>
-        <a href="{{ url_for('notesheets_list') }}" class="btn btn-secondary">
-            <i class="bi bi-arrow-left"></i> Back to List
-        </a>
+        <h2><i class="bi bi-file-text"></i> Notesheet Details</h2>
+        <div>
+            {% if current_user.is_superuser %}
+            <a href="{{ url_for('edit_notesheet', notesheet_id=notesheet.notesheet_id) }}" class="btn btn-warning me-2">
+                <i class="bi bi-pencil-square"></i> Edit Notesheet
+            </a>
+            {% endif %}
+            <a href="{{ url_for('notesheets_list') }}" class="btn btn-secondary">
+                <i class="bi bi-arrow-left"></i> Back to List
+            </a>
+        </div>
     </div>
     
     <div class="row">
-        <!-- Notesheet Information -->
         <div class="col-md-8">
+            <!-- Notesheet Information -->
             <div class="card mb-4">
                 <div class="card-header bg-primary text-white">
                     <h5 class="mb-0"><i class="bi bi-info-circle"></i> Notesheet Information</h5>
@@ -21,64 +28,46 @@
                 <div class="card-body">
                     <div class="row mb-3">
                         <div class="col-md-6">
-                            <strong>Notesheet Number:</strong>
-                            <p class="text-primary fs-5">{{ notesheet.notesheet_number }}</p>
+                            <strong>Notesheet Number:</strong><br>
+                            <span class="text-primary fs-5">{{ notesheet.notesheet_number }}</span>
                         </div>
                         <div class="col-md-6">
-                            <strong>Reference Number:</strong>
-                            <p>{{ notesheet.reference_number or 'N/A' }}</p>
+                            <strong>Reference Number:</strong><br>
+                            {{ notesheet.reference_number or 'N/A' }}
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <strong>Subject:</strong><br>
+                        {{ notesheet.subject }}
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <strong>Sender Name:</strong><br>
+                            {{ notesheet.sender_name }}
+                        </div>
+                        <div class="col-md-6">
+                            <strong>Sender Organization:</strong><br>
+                            {{ notesheet.sender_organization or 'N/A' }}
                         </div>
                     </div>
                     
                     <div class="row mb-3">
-                        <div class="col-md-12">
-                            <strong>Subject:</strong>
-                            <p class="fs-6">{{ notesheet.subject }}</p>
-                        </div>
-                    </div>
-                    
-                    <hr>
-                    
-                    <div class="row mb-3">
                         <div class="col-md-6">
-                            <strong>Sender Name:</strong>
-                            <p>{{ notesheet.sender_name }}</p>
+                            <strong>Received Date:</strong><br>
+                            {{ notesheet.received_date }}
                         </div>
                         <div class="col-md-6">
-                            <strong>Sender Organization:</strong>
-                            <p>{{ notesheet.sender_organization or 'N/A' }}</p>
-                        </div>
-                    </div>
-                    
-                    {% if notesheet.sender_address %}
-                    <div class="row mb-3">
-                        <div class="col-md-12">
-                            <strong>Sender Address:</strong>
-                            <p>{{ notesheet.sender_address }}</p>
-                        </div>
-                    </div>
-                    {% endif %}
-                    
-                    <hr>
-                    
-                    <div class="row mb-3">
-                        <div class="col-md-6">
-                            <strong>Received Date:</strong>
-                            <p>{{ notesheet.received_date }}</p>
-                        </div>
-                        <div class="col-md-6">
-                            <strong>Category:</strong>
-                            <p>{{ notesheet.category or 'N/A' }}</p>
+                            <strong>Category:</strong><br>
+                            {{ notesheet.category or 'N/A' }}
                         </div>
                     </div>
                     
                     {% if notesheet.remarks %}
-                    <hr>
-                    <div class="row">
-                        <div class="col-md-12">
-                            <strong>Remarks:</strong>
-                            <p>{{ notesheet.remarks }}</p>
-                        </div>
+                    <div class="mb-3">
+                        <strong>Remarks:</strong><br>
+                        {{ notesheet.remarks }}
                     </div>
                     {% endif %}
                 </div>
@@ -93,37 +82,94 @@
                     {% if movements %}
                     <div class="timeline">
                         {% for movement in movements %}
-                        <div class="timeline-item">
-                            <div class="timeline-icon">
-                                <i class="bi bi-arrow-right-circle"></i>
+                        <div class="timeline-item {% if movement.is_current %}border-primary{% endif %}">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="badge {% if movement.is_current %}bg-success{% else %}bg-secondary{% endif %}">
+                                    {{ movement.action_taken }}
+                                </span>
+                                
+                                {% if movement.to_section_name %}
+                                <div class="text-center flex-grow-1">
+                                    <h4 class="mb-0 {% if movement.is_current %}text-primary{% else %}text-secondary{% endif %} fw-bold">
+                                        <i class="bi bi-{% if movement.is_current %}pin-angle-fill{% else %}geo-alt{% endif %}"></i> {{ movement.to_section_name }}
+                                    </h4>
+                                    <small class="text-muted">{% if movement.is_current %}Currently Holding{% else %}Was Holding{% endif %}</small>
+                                </div>
+                                {% endif %}
+                                
+                                <small class="text-muted">{{ movement.display_date }}</small>
                             </div>
-                            <div class="card mb-3">
-                                <div class="card-body">
-                                    <div class="d-flex justify-content-between">
-                                        <div>
-                                            <h6 class="mb-1">
-                                                <span class="badge bg-primary">{{ movement.action_taken }}</span>
-                                            </h6>
-                                            <p class="mb-1">
-                                                <strong>From:</strong> {{ movement.from_user_name or 'Receive Section' }}
-                                                <i class="bi bi-arrow-right mx-2"></i>
-                                                <strong>To:</strong> {{ movement.to_user_name }}
-                                            </p>
-                                            <p class="mb-1">
-                                                <strong>Forwarded by:</strong> {{ movement.forwarded_by_name }}
-                                            </p>
-                                            {% if movement.comments %}
-                                            <p class="mb-0 text-muted">
-                                                <i class="bi bi-chat-left-text"></i> {{ movement.comments }}
-                                            </p>
-                                            {% endif %}
-                                        </div>
-                                        <div class="text-end text-muted">
-                                            <small>{{ movement.forwarded_date }}</small>
-                                        </div>
-                                    </div>
+                            
+                            <div class="mb-2">
+                                {% if movement.from_section_name and movement.from_user_name %}
+                                <div class="mb-1">
+                                    <strong>From:</strong>
+                                    <span class="badge bg-light text-dark border">
+                                        <i class="bi bi-building"></i> {{ movement.from_section_name }}
+                                    </span>
+                                    <span class="badge bg-info text-white">
+                                        <i class="bi bi-person"></i> {{ movement.from_user_name }}
+                                    </span>
+                                </div>
+                                {% endif %}
+                                
+                                <div class="mb-1">
+                                    <strong>To:</strong>
+                                    <span class="badge bg-light text-dark border">
+                                        <i class="bi bi-building"></i> {{ movement.to_section_name or 'N/A' }}
+                                    </span>
+                                    <span class="badge bg-primary text-white">
+                                        <i class="bi bi-person"></i> {{ movement.to_user_name }}
+                                    </span>
+                                </div>
+                                
+                                <div>
+                                    <strong>Forwarded by:</strong>
+                                    <span class="badge bg-secondary">
+                                        <i class="bi bi-person-check"></i> {{ movement.forwarded_by_name }}
+                                    </span>
                                 </div>
                             </div>
+                            
+                            {% if movement.in_date or movement.out_date %}
+                            <div class="mb-2 p-2 bg-light rounded">
+                                <small class="text-muted">
+                                    <i class="bi bi-box-arrow-in-right text-success"></i> <strong>IN:</strong> {{ movement.in_date or 'N/A' }}
+                                    &nbsp;|&nbsp;
+                                    <i class="bi bi-box-arrow-right text-danger"></i> <strong>OUT:</strong> {{ movement.out_date or 'N/A' }}
+                                </small>
+                            </div>
+                            {% endif %}
+                            
+                            {% if movement.time_held %}
+                            <div class="mb-2">
+                                <span class="badge bg-warning text-dark">
+                                    <i class="bi bi-clock-history"></i> Time held: {{ movement.time_held }}
+                                </span>
+                            </div>
+                            {% endif %}
+                            
+                            {% if movement.comments %}
+                            <div class="alert alert-info mb-2 py-1 px-2">
+                                <small><i class="bi bi-chat-left-text"></i> {{ movement.comments }}</small>
+                            </div>
+                            {% endif %}
+                            
+                            {% if current_user.is_superuser %}
+                            <div class="mt-2">
+                                <a href="{{ url_for('edit_notesheet_movement', movement_id=movement.movement_id) }}" 
+                                   class="btn btn-sm btn-warning">
+                                    <i class="bi bi-pencil"></i> Edit
+                                </a>
+                                <form method="POST" action="{{ url_for('delete_notesheet_movement', movement_id=movement.movement_id) }}" 
+                                      style="display: inline;" 
+                                      onsubmit="return confirm('Delete this movement?');">
+                                    <button type="submit" class="btn btn-sm btn-danger">
+                                        <i class="bi bi-trash"></i> Delete
+                                    </button>
+                                </form>
+                            </div>
+                            {% endif %}
                         </div>
                         {% endfor %}
                     </div>
@@ -134,95 +180,168 @@
             </div>
         </div>
         
-        <!-- Status and Actions -->
         <div class="col-md-4">
-            <!-- Current Status -->
-            <div class="card mb-4">
-                <div class="card-header bg-warning">
+            <!-- Status Card -->
+            <div class="card mb-4 border-warning">
+                <div class="card-header bg-warning text-dark">
                     <h5 class="mb-0"><i class="bi bi-info-square"></i> Status</h5>
                 </div>
                 <div class="card-body">
                     <div class="mb-3">
-                        <strong>Current Status:</strong>
-                        <h5>
-                            <span class="badge 
-                                {% if notesheet.current_status == 'Received' %}bg-primary
-                                {% elif notesheet.current_status == 'In-Progress' %}bg-warning
-                                {% elif notesheet.current_status == 'Forwarded' %}bg-info
-                                {% elif notesheet.current_status == 'Closed' %}bg-secondary
-                                {% else %}bg-dark
-                                {% endif %}">
-                                {{ notesheet.current_status }}
-                            </span>
-                        </h5>
+                        <strong>Current Status:</strong><br>
+                        <span class="badge bg-primary">{{ notesheet.current_status }}</span>
                     </div>
                     
                     <div class="mb-3">
-                        <strong>Priority:</strong>
-                        <h5>
-                            {% if notesheet.priority == 'Urgent' %}
-                                <span class="badge bg-danger">{{ notesheet.priority }}</span>
-                            {% elif notesheet.priority == 'High' %}
-                                <span class="badge bg-warning">{{ notesheet.priority }}</span>
-                            {% else %}
-                                <span class="badge bg-secondary">{{ notesheet.priority }}</span>
-                            {% endif %}
-                        </h5>
+                        <strong>Priority:</strong><br>
+                        <span class="badge {% if notesheet.priority == 'Urgent' %}bg-danger{% elif notesheet.priority == 'High' %}bg-warning{% else %}bg-secondary{% endif %}">
+                            {{ notesheet.priority }}
+                        </span>
                     </div>
                     
                     <div class="mb-3">
-                        <strong>Current Holder:</strong>
-                        <p>{{ notesheet.current_holder_name or 'N/A' }}</p>
+                        <strong>Current Location:</strong><br>
+                        <i class="bi bi-building"></i> {{ notesheet.current_section_name or 'N/A' }}<br>
+                        <i class="bi bi-person"></i> {{ notesheet.current_holder_name or 'N/A' }}
                     </div>
                     
+                    {% if notesheet.days_held is not none %}
                     <div class="mb-3">
-                        <strong>Received By:</strong>
-                        <p>{{ notesheet.received_by_name }}</p>
+                        <strong>Time at Current Location:</strong><br>
+                        <span class="text-danger">
+                            <i class="bi bi-clock"></i> 
+                            {{ notesheet.days_held }} days, {{ notesheet.hours_held % 24 }} hours
+                        </span>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="mb-3">
+                        <strong>Received By:</strong><br>
+                        {{ notesheet.received_by_name }}
                     </div>
                 </div>
             </div>
             
-            <!-- Forward Notesheet -->
-            {% if current_user.can_forward() and notesheet.current_holder == current_user.id %}
-            <div class="card">
-                <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0"><i class="bi bi-forward"></i> Forward Notesheet</h5>
+            <!-- Forward Action -->
+            {% if can_forward %}
+            <div class="card border-success">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="bi bi-arrow-right-circle"></i> Forward Document</h5>
                 </div>
                 <div class="card-body">
-                    <form method="POST" action="{{ url_for('forward_notesheet_route', notesheet_id=notesheet.notesheet_id) }}">
+                    <form method="POST" action="{{ url_for('forward_notesheet_route', notesheet_id=notesheet.notesheet_id) }}" onsubmit="return validateForward()">
                         <div class="mb-3">
                             <label for="to_user" class="form-label">Forward To *</label>
                             <select class="form-select" id="to_user" name="to_user" required>
                                 <option value="">Select User</option>
                                 {% for user in users %}
-                                <option value="{{ user.user_id }}">{{ user.full_name }} - {{ user.designation or user.department }}</option>
+                                <option value="{{ user.user_id }}">
+                                    {{ user.section_name or 'N/A' }} - {{ user.full_name }} ({{ user.designation or 'N/A' }})
+                                </option>
                                 {% endfor %}
                             </select>
                         </div>
                         
                         <div class="mb-3">
-                            <label for="action" class="form-label">Action</label>
-                            <select class="form-select" id="action" name="action">
-                                <option value="Forwarded">Forwarded</option>
-                                <option value="Approved">Approved</option>
-                                <option value="Returned">Returned</option>
-                                <option value="Rejected">Rejected</option>
+                            <label for="action" class="form-label">Action *</label>
+                            <select class="form-select" id="action" name="action" required>
+                                <option value="Forwarded">Forward</option>
+                                <option value="Returned to Receive">Return to Receive</option>
                             </select>
                         </div>
                         
                         <div class="mb-3">
-                            <label for="comments" class="form-label">Comments</label>
-                            <textarea class="form-control" id="comments" name="comments" rows="3"></textarea>
+                            <label for="forward_date" class="form-label">Forward Date *</label>
+                            <input type="date" class="form-control" id="forward_date" name="forward_date" required>
+                            <small class="text-muted">Physical document forward date</small>
                         </div>
                         
-                        <button type="submit" class="btn btn-primary w-100">
-                            <i class="bi bi-forward"></i> Forward Notesheet
+                        <div class="mb-3">
+                            <label for="comments" class="form-label">Comments</label>
+                            <textarea class="form-control" id="comments" name="comments" rows="3" placeholder="Add any remarks or instructions..."></textarea>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-success w-100">
+                            <i class="bi bi-send"></i> Forward
                         </button>
                     </form>
+                </div>
+            </div>
+            {% else %}
+            <div class="card border-secondary">
+                <div class="card-body text-center text-muted">
+                    <i class="bi bi-lock" style="font-size: 2rem;"></i>
+                    <p class="mt-2">You cannot forward this document</p>
                 </div>
             </div>
             {% endif %}
         </div>
     </div>
 </div>
+
+<style>
+.timeline {
+    position: relative;
+    padding-left: 30px;
+}
+
+.timeline-item {
+    position: relative;
+    padding: 15px;
+    margin-bottom: 20px;
+    background: #f8f9fa;
+    border-left: 3px solid #dee2e6;
+    border-radius: 4px;
+}
+
+.timeline-item.border-primary {
+    border-left-color: #0d6efd;
+    background: #e7f1ff;
+}
+</style>
+
+<script>
+// Set today's date as default for forward date
+document.addEventListener('DOMContentLoaded', function() {
+    const forwardDateInput = document.getElementById('forward_date');
+    if (forwardDateInput) {
+        const today = new Date().toISOString().split('T')[0];
+        forwardDateInput.value = today;
+        forwardDateInput.max = today; // Cannot select future dates
+    }
+});
+
+function validateForward() {
+    const toUser = document.getElementById('to_user').value;
+    const action = document.getElementById('action').value;
+    const forwardDate = document.getElementById('forward_date').value;
+    
+    if (!toUser) {
+        alert('Please select a user to forward to');
+        return false;
+    }
+    
+    if (!action) {
+        alert('Please select an action');
+        return false;
+    }
+    
+    if (!forwardDate) {
+        alert('Please select forward date');
+        return false;
+    }
+    
+    // Check if date is not in future
+    const selectedDate = new Date(forwardDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    if (selectedDate > today) {
+        alert('Forward date cannot be in the future');
+        return false;
+    }
+    
+    return true;
+}
+</script>
 {% endblock %}

@@ -46,7 +46,8 @@
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 <label for="reference_number" class="form-label">Reference Number</label>
-                                <input type="text" class="form-control" id="reference_number" name="reference_number">
+                                <input type="text" class="form-control" id="reference_number" name="reference_number" readonly>
+                                <small class="text-muted">Auto-filled from Notesheet Number</small>
                             </div>
                             <div class="col-md-6">
                                 <label for="category" class="form-label">Category</label>
@@ -95,6 +96,11 @@
 <script>
 // Set today's date as default
 document.getElementById('received_date').valueAsDate = new Date();
+
+// Auto-fill reference number from notesheet number
+document.getElementById('notesheet_number').addEventListener('input', function() {
+    document.getElementById('reference_number').value = this.value;
+});
 
 // Form validation
 (function () {
