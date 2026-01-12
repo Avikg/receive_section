@@ -48,16 +48,32 @@
                             <i class="bi bi-inbox"></i> Receive
                         </a>
                         <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="{{ url_for('receive_notesheet') }}">Receive Notesheet</a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('receive_bill') }}">Receive Bill</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('receive_notesheet') }}">
+                                <i class="bi bi-file-earmark-text"></i> Receive Notesheet
+                            </a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('receive_bill') }}">
+                                <i class="bi bi-receipt"></i> Receive Bill
+                            </a></li>
                         </ul>
                     </li>
                     {% endif %}
                     {% if current_user.can_manage_users() %}
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('admin_users') }}">
-                            <i class="bi bi-people"></i> Admin
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-shield-check"></i> Admin
                         </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{{ url_for('admin_dashboard') }}">
+                                <i class="bi bi-speedometer"></i> Admin Dashboard
+                            </a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('admin_logs') }}">
+                                <i class="bi bi-list-ul"></i> Activity Logs
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{{ url_for('admin_users') }}">
+                                <i class="bi bi-people"></i> User Management
+                            </a></li>
+                        </ul>
                     </li>
                     {% endif %}
                 </ul>

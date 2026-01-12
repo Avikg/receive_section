@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+
+{% block title %}Activity Logs - WBSEDCL{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-list-ul"></i> Activity Logs</h2>
+        <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Back to Admin Dashboard
+        </a>
+    </div>
+
+    <!-- Advanced Filters -->
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0"><i class="bi bi-funnel"></i> Filter Logs</h5>
+        </div>
+        <div class="card-body">
+            <form method="GET" action="{{ url_for('admin_logs') }}" class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Activity Type</label>
+                    <select class="form-select" name="type">
+                        <option value="">All Types</option>
+                        {% for type in activity_types %}
+                        <option value="{{ type }}" {% if filters.type == type %}selected{% endif %}>
+                            {{ type.replace('_', ' ').title() }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label">User</label>
+                    <select class="form-select" name="user">
+                        <option value="">All Users</option>
+                        {% for user in users %}
+                        <option value="{{ user.user_id }}" {% if filters.user == user.user_id|string %}selected{% endif %}>
+                            {{ user.full_name }} (@{{ user.username }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label">Date From</label>
+                    <input type="date" class="form-control" name="date_from" value="{{ filters.date_from }}">
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label">Date To</label>
+                    <input type="date" class="form-control" name="date_to" value="{{ filters.date_to }}">
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label">&nbsp;</label>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-search"></i> Filter
+                    </button>
+                </div>
+
+                <div class="col-md-8">
+                    <label class="form-label">Search Description</label>
+                    <input type="text" class="form-control" name="search" placeholder="Search in description..." value="{{ filters.search }}">
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label">&nbsp;</label>
+                    <a href="{{ url_for('admin_logs') }}" class="btn btn-secondary w-100">
+                        <i class="bi bi-x-circle"></i> Clear
+                    </a>
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label">&nbsp;</label>
+                    <button type="button" class="btn btn-success w-100" onclick="exportLogs()">
+                        <i class="bi bi-download"></i> Export
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Activity Type Legend -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <h6 class="mb-3">Activity Type Legend:</h6>
+            <div class="d-flex flex-wrap gap-2">
+                <span class="badge bg-success">Login</span>
+                <span class="badge bg-secondary">Logout</span>
+                <span class="badge bg-danger">Login Failed</span>
+                <span class="badge bg-info">Notesheet/Bill Forwarded</span>
+                <span class="badge bg-warning">User Created/Updated</span>
+                <span class="badge bg-primary">Notesheet/Bill Received</span>
+                <span class="badge bg-dark">Other Actions</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Logs Table -->
+    <div class="card shadow-sm">
+        <div class="card-body">
+            {% if logs %}
+            <div class="table-responsive">
+                <table class="table table-hover" id="logsTable">
+                    <thead class="table-light">
+                        <tr>
+                            <th>ID</th>
+                            <th>Timestamp</th>
+                            <th>User</th>
+                            <th>Activity Type</th>
+                            <th>Description</th>
+                            <th>IP Address</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for log in logs %}
+                        <tr>
+                            <td><small>{{ log.log_id }}</small></td>
+                            <td><small>{{ log.created_at }}</small></td>
+                            <td>
+                                {% if log.full_name %}
+                                <strong>{{ log.full_name }}</strong>
+                                <br><small class="text-muted">@{{ log.username }}</small>
+                                {% else %}
+                                <span class="text-muted">System</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="badge 
+                                    {% if log.activity_type == 'login' %}bg-success
+                                    {% elif log.activity_type == 'logout' %}bg-secondary
+                                    {% elif log.activity_type == 'login_failed' %}bg-danger
+                                    {% elif 'forwarded' in log.activity_type %}bg-info
+                                    {% elif 'user_' in log.activity_type %}bg-warning
+                                    {% elif 'received' in log.activity_type %}bg-primary
+                                    {% else %}bg-dark
+                                    {% endif %}">
+                                    {{ log.activity_type.replace('_', ' ').title() }}
+                                </span>
+                            </td>
+                            <td><small>{{ log.description }}</small></td>
+                            <td>
+                                <small class="text-muted font-monospace">{{ log.ip_address }}</small>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <p class="text-muted mt-3">
+                Showing {{ logs|length }} log entries (max 500)
+            </p>
+            {% else %}
+            <div class="text-center text-muted py-5">
+                <i class="bi bi-inbox" style="font-size: 3rem;"></i>
+                <p class="mt-3">No logs found matching your criteria</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+function exportLogs() {
+    // Get table data
+    const table = document.getElementById('logsTable');
+    let csv = 'ID,Timestamp,User,Username,Activity Type,Description,IP Address\n';
+    
+    // Get all rows
+    const rows = table.querySelectorAll('tbody tr');
+    rows.forEach(row => {
+        const cols = row.querySelectorAll('td');
+        const id = cols[0].textContent.trim();
+        const timestamp = cols[1].textContent.trim();
+        const fullName = cols[2].querySelector('strong')?.textContent || 'System';
+        const username = cols[2].querySelector('.text-muted')?.textContent.replace('@', '') || '';
+        const activityType = cols[3].textContent.trim();
+        const description = cols[4].textContent.trim().replace(/,/g, ';');
+        const ip = cols[5].textContent.trim();
+        
+        csv += `${id},"${timestamp}","${fullName}","${username}","${activityType}","${description}","${ip}"\n`;
+    });
+    
+    // Create download link
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'activity_logs_' + new Date().toISOString().slice(0,10) + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+}
+</script>
+{% endblock %}

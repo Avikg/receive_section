@@ -195,6 +195,29 @@ def login():
             flash('Login successful!', 'success')
             return redirect(url_for('dashboard'))
         else:
+            # Failed login - check if username exists
+            conn = db.connect()
+            cursor = conn.cursor()
+            cursor.execute('SELECT user_id FROM users WHERE username = ?', (username,))
+            user_exists = cursor.fetchone()
+            
+            if user_exists:
+                # User exists but wrong password
+                db.log_activity(
+                    user_exists[0], 
+                    'login_failed', 
+                    f'Failed login attempt - Invalid password for username: {username}', 
+                    request.remote_addr
+                )
+            else:
+                # Username doesn't exist
+                db.log_activity(
+                    None,
+                    'login_failed',
+                    f'Failed login attempt - Username not found: {username}',
+                    request.remote_addr
+                )
+            
             db.close()
             flash('Invalid username or password.', 'error')
     
@@ -1430,6 +1453,343 @@ def api_toggle_user_status(user_id):
 @login_required
 @admin_required
 def edit_user(user_id):
+    """Edit user - superuser only"""
+    db = WBSEDCLDatabase()
+    conn = db.connect()
+    cursor = conn.cursor()
+    
+    if request.method == 'POST':
+        # Get form data
+        username = request.form.get('username')
+        full_name = request.form.get('full_name')
+        email = request.form.get('email')
+        phone = request.form.get('phone')
+        section_id = request.form.get('section_id')
+        designation = request.form.get('designation')
+        new_password = request.form.get('new_password')
+        is_active = 1 if request.form.get('is_active') else 0
+        is_superuser = 1 if request.form.get('is_superuser') else 0
+        roles = request.form.getlist('roles')
+        
+        # Validation
+        if not username or not full_name or not section_id:
+            flash('Username, Full Name, and Section are required.', 'error')
+            return redirect(url_for('edit_user', user_id=user_id))
+        
+        if not roles:
+            flash('At least one role must be selected.', 'error')
+            return redirect(url_for('edit_user', user_id=user_id))
+        
+        # Check if username already exists (for other users)
+        cursor.execute('SELECT user_id FROM users WHERE username = ? AND user_id != ?', (username, user_id))
+        if cursor.fetchone():
+            flash(f'Username "{username}" is already taken.', 'error')
+            return redirect(url_for('edit_user', user_id=user_id))
+        
+        # Prevent removing own superuser status
+        if user_id == current_user.id and not is_superuser:
+            flash('You cannot remove your own superuser status.', 'error')
+            return redirect(url_for('edit_user', user_id=user_id))
+        
+        # Update user
+        if new_password:
+            # Hash the password
+            import hashlib
+            password_hash = hashlib.sha256(new_password.encode()).hexdigest()
+            cursor.execute('''
+                UPDATE users SET
+                    username = ?,
+                    password_hash = ?,
+                    full_name = ?,
+                    email = ?,
+                    phone = ?,
+                    section_id = ?,
+                    designation = ?,
+                    is_active = ?,
+                    is_superuser = ?
+                WHERE user_id = ?
+            ''', (username, password_hash, full_name, email, phone, section_id, designation, is_active, is_superuser, user_id))
+        else:
+            cursor.execute('''
+                UPDATE users SET
+                    username = ?,
+                    full_name = ?,
+                    email = ?,
+                    phone = ?,
+                    section_id = ?,
+                    designation = ?,
+                    is_active = ?,
+                    is_superuser = ?
+                WHERE user_id = ?
+            ''', (username, full_name, email, phone, section_id, designation, is_active, is_superuser, user_id))
+        
+        # Update roles - delete old mappings and add new ones
+        cursor.execute('DELETE FROM user_role_mapping WHERE user_id = ?', (user_id,))
+        for role_id in roles:
+            cursor.execute('''
+                INSERT INTO user_role_mapping (user_id, role_id, assigned_by, assigned_at)
+                VALUES (?, ?, ?, datetime('now'))
+            ''', (user_id, int(role_id), current_user.id))
+        
+        conn.commit()
+        
+        # Log activity
+        db.log_activity(
+            current_user.id,
+            'user_updated',
+            f"Updated user: {username} (ID: {user_id})",
+            request.remote_addr
+        )
+        
+        db.close()
+        flash(f"User '{username}' updated successfully!", 'success')
+        return redirect(url_for('admin_users'))
+    
+    # GET - show form
+    cursor.execute('''
+        SELECT 
+            u.user_id, u.username, u.full_name, u.email, u.phone,
+            u.section_id, s.section_name, u.designation, 
+            u.is_active, u.is_superuser, u.last_login,
+            GROUP_CONCAT(ur.role_name) as roles
+        FROM users u
+        LEFT JOIN sections s ON u.section_id = s.section_id
+        LEFT JOIN user_role_mapping urm ON u.user_id = urm.user_id
+        LEFT JOIN user_roles ur ON urm.role_id = ur.role_id
+        WHERE u.user_id = ?
+        GROUP BY u.user_id
+    ''', (user_id,))
+    
+    user = cursor.fetchone()
+    
+    if not user:
+        db.close()
+        flash('User not found.', 'error')
+        return redirect(url_for('admin_users'))
+    
+    columns = [desc[0] for desc in cursor.description]
+    user = dict(zip(columns, user))
+    
+    # Get all sections
+    sections = db.get_all_sections()
+    
+    # Get all roles
+    cursor.execute('SELECT * FROM user_roles ORDER BY role_id')
+    all_roles = cursor.fetchall()
+    columns = [desc[0] for desc in cursor.description]
+    all_roles = [dict(zip(columns, row)) for row in all_roles]
+    
+    db.close()
+    
+    return render_template('admin/edit_user.html', 
+                         user=user, 
+                         sections=sections, 
+                         all_roles=all_roles)
+
+@app.route('/admin/dashboard')
+@login_required
+@admin_required
+def admin_dashboard():
+    """Admin monitoring dashboard"""
+    db = WBSEDCLDatabase()
+    conn = db.connect()
+    cursor = conn.cursor()
+    
+    # System Statistics
+    cursor.execute('SELECT COUNT(*) FROM users WHERE is_active = 1')
+    active_users = cursor.fetchone()[0]
+    
+    cursor.execute('SELECT COUNT(*) FROM users WHERE is_active = 0')
+    inactive_users = cursor.fetchone()[0]
+    
+    cursor.execute('SELECT COUNT(*) FROM notesheets')
+    total_notesheets = cursor.fetchone()[0]
+    
+    cursor.execute('SELECT COUNT(*) FROM bills')
+    total_bills = cursor.fetchone()[0]
+    
+    cursor.execute('SELECT COUNT(*) FROM notesheet_movements')
+    total_ns_movements = cursor.fetchone()[0]
+    
+    cursor.execute('SELECT COUNT(*) FROM bill_movements')
+    total_bill_movements = cursor.fetchone()[0]
+    
+    # Recent Activity (Last 50)
+    cursor.execute('''
+        SELECT 
+            al.log_id,
+            al.user_id,
+            u.username,
+            u.full_name,
+            al.activity_type,
+            al.description,
+            al.ip_address,
+            al.created_at
+        FROM activity_logs al
+        LEFT JOIN users u ON al.user_id = u.user_id
+        ORDER BY al.created_at DESC
+        LIMIT 50
+    ''')
+    activities = cursor.fetchall()
+    columns = [desc[0] for desc in cursor.description]
+    activities = [dict(zip(columns, row)) for row in activities]
+    
+    # Failed Login Attempts (if exists)
+    try:
+        cursor.execute('''
+            SELECT COUNT(*) FROM activity_logs 
+            WHERE activity_type = 'login_failed' 
+            AND created_at >= datetime('now', '-24 hours')
+        ''')
+        failed_logins_24h = cursor.fetchone()[0]
+    except:
+        failed_logins_24h = 0
+    
+    # Active Sessions (users who logged in today)
+    cursor.execute('''
+        SELECT COUNT(DISTINCT user_id) FROM activity_logs
+        WHERE activity_type = 'login'
+        AND DATE(created_at) = DATE('now')
+    ''')
+    active_sessions_today = cursor.fetchone()[0]
+    
+    # Top Active Users (by activity count)
+    cursor.execute('''
+        SELECT 
+            u.username,
+            u.full_name,
+            COUNT(*) as activity_count,
+            MAX(al.created_at) as last_activity
+        FROM activity_logs al
+        JOIN users u ON al.user_id = u.user_id
+        WHERE al.created_at >= datetime('now', '-7 days')
+        GROUP BY al.user_id
+        ORDER BY activity_count DESC
+        LIMIT 10
+    ''')
+    top_users = cursor.fetchall()
+    columns = [desc[0] for desc in cursor.description]
+    top_users = [dict(zip(columns, row)) for row in top_users]
+    
+    # Document Processing Stats
+    cursor.execute('''
+        SELECT 
+            DATE(forwarded_date) as date,
+            COUNT(*) as count
+        FROM notesheet_movements
+        WHERE forwarded_date >= date('now', '-7 days')
+        GROUP BY DATE(forwarded_date)
+        ORDER BY date DESC
+    ''')
+    ns_daily_activity = cursor.fetchall()
+    columns = [desc[0] for desc in cursor.description]
+    ns_daily_activity = [dict(zip(columns, row)) for row in ns_daily_activity]
+    
+    db.close()
+    
+    stats = {
+        'active_users': active_users,
+        'inactive_users': inactive_users,
+        'total_notesheets': total_notesheets,
+        'total_bills': total_bills,
+        'total_ns_movements': total_ns_movements,
+        'total_bill_movements': total_bill_movements,
+        'failed_logins_24h': failed_logins_24h,
+        'active_sessions_today': active_sessions_today
+    }
+    
+    return render_template('admin/dashboard.html',
+                         stats=stats,
+                         activities=activities,
+                         top_users=top_users,
+                         ns_daily_activity=ns_daily_activity)
+
+@app.route('/admin/logs')
+@login_required
+@admin_required
+def admin_logs():
+    """View all activity logs with filtering"""
+    db = WBSEDCLDatabase()
+    conn = db.connect()
+    cursor = conn.cursor()
+    
+    # Get filter parameters
+    activity_type = request.args.get('type', '')
+    user_id = request.args.get('user', '')
+    date_from = request.args.get('date_from', '')
+    date_to = request.args.get('date_to', '')
+    search = request.args.get('search', '')
+    
+    # Build query
+    query = '''
+        SELECT 
+            al.log_id,
+            al.user_id,
+            u.username,
+            u.full_name,
+            al.activity_type,
+            al.description,
+            al.ip_address,
+            al.created_at
+        FROM activity_logs al
+        LEFT JOIN users u ON al.user_id = u.user_id
+        WHERE 1=1
+    '''
+    params = []
+    
+    if activity_type:
+        query += ' AND al.activity_type = ?'
+        params.append(activity_type)
+    
+    if user_id:
+        query += ' AND al.user_id = ?'
+        params.append(user_id)
+    
+    if date_from:
+        query += ' AND DATE(al.created_at) >= ?'
+        params.append(date_from)
+    
+    if date_to:
+        query += ' AND DATE(al.created_at) <= ?'
+        params.append(date_to)
+    
+    if search:
+        query += ' AND (al.description LIKE ? OR u.username LIKE ?)'
+        search_param = f'%{search}%'
+        params.extend([search_param, search_param])
+    
+    query += ' ORDER BY al.created_at DESC LIMIT 500'
+    
+    cursor.execute(query, params)
+    logs = cursor.fetchall()
+    columns = [desc[0] for desc in cursor.description]
+    logs = [dict(zip(columns, row)) for row in logs]
+    
+    # Get all users for filter dropdown
+    cursor.execute('SELECT user_id, username, full_name FROM users ORDER BY username')
+    users = cursor.fetchall()
+    columns = [desc[0] for desc in cursor.description]
+    users = [dict(zip(columns, row)) for row in users]
+    
+    # Get activity types
+    cursor.execute('SELECT DISTINCT activity_type FROM activity_logs ORDER BY activity_type')
+    activity_types = [row[0] for row in cursor.fetchall()]
+    
+    db.close()
+    
+    return render_template('admin/logs.html',
+                         logs=logs,
+                         users=users,
+                         activity_types=activity_types,
+                         filters={
+                             'type': activity_type,
+                             'user': user_id,
+                             'date_from': date_from,
+                             'date_to': date_to,
+                             'search': search
+                         })
+
+# SUPERUSER EDIT ROUTES - INSERT BEFORE "# Error handlers" (line 1133)
     """Edit user - superuser only"""
     db = WBSEDCLDatabase()
     conn = db.connect()

@@ -1,0 +1,237 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Dashboard - WBSEDCL{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-shield-check"></i> Admin Dashboard</h2>
+        <div>
+            <a href="{{ url_for('admin_logs') }}" class="btn btn-primary">
+                <i class="bi bi-list-ul"></i> View All Logs
+            </a>
+            <a href="{{ url_for('admin_users') }}" class="btn btn-success">
+                <i class="bi bi-people"></i> Manage Users
+            </a>
+        </div>
+    </div>
+
+    <!-- System Stats Cards -->
+    <div class="row g-4 mb-4">
+        <div class="col-md-3">
+            <div class="card text-white bg-success shadow-sm">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 opacity-75">
+                        <i class="bi bi-person-check"></i> Active Users
+                    </h6>
+                    <h2 class="card-title mb-0">{{ stats.active_users }}</h2>
+                    <small class="opacity-75">{{ stats.inactive_users }} inactive</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card text-white bg-info shadow-sm">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 opacity-75">
+                        <i class="bi bi-clock-history"></i> Active Sessions Today
+                    </h6>
+                    <h2 class="card-title mb-0">{{ stats.active_sessions_today }}</h2>
+                    <small class="opacity-75">Unique logins</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card text-white bg-warning shadow-sm">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 opacity-75">
+                        <i class="bi bi-exclamation-triangle"></i> Failed Logins (24h)
+                    </h6>
+                    <h2 class="card-title mb-0">{{ stats.failed_logins_24h }}</h2>
+                    <small class="opacity-75">Last 24 hours</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card text-white bg-primary shadow-sm">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 opacity-75">
+                        <i class="bi bi-arrow-repeat"></i> Total Movements
+                    </h6>
+                    <h2 class="card-title mb-0">{{ stats.total_ns_movements + stats.total_bill_movements }}</h2>
+                    <small class="opacity-75">Document forwards</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Document Stats -->
+    <div class="row g-4 mb-4">
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-graph-up"></i> Document Statistics</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-6 border-end">
+                            <h3 class="text-primary">{{ stats.total_notesheets }}</h3>
+                            <p class="text-muted mb-0">Total Notesheets</p>
+                            <small class="text-muted">{{ stats.total_ns_movements }} movements</small>
+                        </div>
+                        <div class="col-6">
+                            <h3 class="text-success">{{ stats.total_bills }}</h3>
+                            <p class="text-muted mb-0">Total Bills</p>
+                            <small class="text-muted">{{ stats.total_bill_movements }} movements</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="bi bi-people"></i> Top Active Users (7 days)</h5>
+                </div>
+                <div class="card-body" style="max-height: 250px; overflow-y: auto;">
+                    {% if top_users %}
+                    <div class="list-group list-group-flush">
+                        {% for user in top_users %}
+                        <div class="list-group-item d-flex justify-content-between align-items-center px-0">
+                            <div>
+                                <strong>{{ user.full_name }}</strong>
+                                <br><small class="text-muted">@{{ user.username }}</small>
+                            </div>
+                            <div class="text-end">
+                                <span class="badge bg-primary rounded-pill">{{ user.activity_count }} activities</span>
+                                <br><small class="text-muted">Last: {{ user.last_activity[:16] }}</small>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="text-muted text-center">No activity in the last 7 days</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Daily Activity Chart -->
+    <div class="row g-4 mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="bi bi-bar-chart-line"></i> Notesheet Activity (Last 7 Days)</h5>
+                </div>
+                <div class="card-body">
+                    {% if ns_daily_activity %}
+                    <canvas id="activityChart" height="80"></canvas>
+                    {% else %}
+                    <p class="text-muted text-center">No activity data available</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Activity Log -->
+    <div class="card shadow-sm">
+        <div class="card-header bg-warning text-dark">
+            <h5 class="mb-0"><i class="bi bi-activity"></i> Recent Activity (Last 50)</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                <table class="table table-sm table-hover">
+                    <thead class="table-light sticky-top">
+                        <tr>
+                            <th>Time</th>
+                            <th>User</th>
+                            <th>Activity Type</th>
+                            <th>Description</th>
+                            <th>IP Address</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for activity in activities %}
+                        <tr>
+                            <td><small>{{ activity.created_at }}</small></td>
+                            <td>
+                                <strong>{{ activity.full_name or 'System' }}</strong>
+                                {% if activity.username %}
+                                <br><small class="text-muted">@{{ activity.username }}</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="badge 
+                                    {% if activity.activity_type == 'login' %}bg-success
+                                    {% elif activity.activity_type == 'logout' %}bg-secondary
+                                    {% elif activity.activity_type == 'login_failed' %}bg-danger
+                                    {% elif activity.activity_type in ['notesheet_forwarded', 'bill_forwarded'] %}bg-info
+                                    {% elif activity.activity_type in ['user_created', 'user_updated'] %}bg-warning
+                                    {% else %}bg-primary
+                                    {% endif %}">
+                                    {{ activity.activity_type.replace('_', ' ').title() }}
+                                </span>
+                            </td>
+                            <td><small>{{ activity.description }}</small></td>
+                            <td><small class="text-muted">{{ activity.ip_address }}</small></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card-footer text-center">
+            <a href="{{ url_for('admin_logs') }}" class="btn btn-sm btn-primary">
+                View All Logs <i class="bi bi-arrow-right"></i>
+            </a>
+        </div>
+    </div>
+</div>
+
+{% if ns_daily_activity %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+const ctx = document.getElementById('activityChart');
+const activityData = {{ ns_daily_activity|tojson }};
+
+new Chart(ctx, {
+    type: 'bar',
+    data: {
+        labels: activityData.map(item => item.date).reverse(),
+        datasets: [{
+            label: 'Notesheet Movements',
+            data: activityData.map(item => item.count).reverse(),
+            backgroundColor: 'rgba(54, 162, 235, 0.5)',
+            borderColor: 'rgba(54, 162, 235, 1)',
+            borderWidth: 1
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: {
+            legend: {
+                display: true,
+                position: 'top'
+            },
+            title: {
+                display: false
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                ticks: {
+                    stepSize: 1
+                }
+            }
+        }
+    }
+});
+</script>
+{% endif %}
+{% endblock %}
