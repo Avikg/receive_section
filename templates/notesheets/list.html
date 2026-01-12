@@ -110,8 +110,10 @@
                 <p class="mt-3">No notesheets found</p>
                 {% if current_user.can_receive() %}
                 <a href="{{ url_for('receive_notesheet') }}" class="btn btn-primary">
-                    <i class="bi bi-plus-circle"></i> Receive First Notesheet
+                    <i class="bi bi-plus-circle"></i> Receive Notesheet
                 </a>
+                {% else %}
+                <p class="text-muted mt-2"><small>You have no notesheets assigned to you at this time.</small></p>
                 {% endif %}
             </div>
             {% endif %}
