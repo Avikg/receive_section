@@ -9,7 +9,7 @@ VERSION: 2026-01-11-FIXED-FORWARDING-v4
 Last Updated: 2026-01-11
 """
 
-from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, send_from_directory
+from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from functools import wraps
 from datetime import datetime, timedelta
@@ -153,12 +153,6 @@ def index():
 def version_check():
     """Quick version check"""
     return "VERSION: 2026-01-12-WITH-SEARCH-REPORTS"
-
-
-@app.route('/service-worker.js')
-def service_worker():
-    """Serve the service worker from the static folder at the site root so it can control the whole scope."""
-    return send_from_directory('static', 'service-worker.js')
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
