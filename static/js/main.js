@@ -127,3 +127,16 @@ function exportTableToCSV(filename) {
     downloadLink.click();
     document.body.removeChild(downloadLink);
 }
+
+// Register service worker for offline support
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function() {
+        navigator.serviceWorker.register('/service-worker.js')
+            .then(function(reg) {
+                console.log('Service worker registered.', reg);
+            })
+            .catch(function(err) {
+                console.warn('Service worker registration failed:', err);
+            });
+    });
+}
