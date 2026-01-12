@@ -1,0 +1,378 @@
+{% extends "base.html" %}
+
+{% block title %}Advanced Reports - WBSEDCL{% endblock %}
+
+{% block extra_css %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2><i class="bi bi-file-earmark-bar-graph"></i> Advanced Reports</h2>
+                <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">
+                    <i class="bi bi-arrow-left"></i> Back
+                </a>
+            </div>
+
+            <!-- Report Selection -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-list-check"></i> Select Report Type</h5>
+                </div>
+                <div class="card-body">
+                    <form method="GET" action="{{ url_for('advanced_reports') }}">
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">Report Type</label>
+                                <select class="form-select" name="report_type" id="reportType" onchange="updateDateFields()">
+                                    <option value="">-- Select Report --</option>
+                                    <option value="section_performance" {% if report_type == 'section_performance' %}selected{% endif %}>Section Performance</option>
+                                    <option value="user_productivity" {% if report_type == 'user_productivity' %}selected{% endif %}>User Productivity</option>
+                                    <option value="document_aging" {% if report_type == 'document_aging' %}selected{% endif %}>Document Aging</option>
+                                    <option value="bottleneck_analysis" {% if report_type == 'bottleneck_analysis' %}selected{% endif %}>Bottleneck Analysis</option>
+                                    <option value="monthly_summary" {% if report_type == 'monthly_summary' %}selected{% endif %}>Monthly Summary</option>
+                                    <option value="priority_analysis" {% if report_type == 'priority_analysis' %}selected{% endif %}>Priority Analysis</option>
+                                    <option value="sla_compliance" {% if report_type == 'sla_compliance' %}selected{% endif %}>SLA Compliance</option>
+                                </select>
+                            </div>
+
+                            <div class="col-md-3 mb-3" id="dateFromDiv">
+                                <label class="form-label">From Date</label>
+                                <input type="date" class="form-control" name="date_from" value="{{ date_from }}">
+                            </div>
+
+                            <div class="col-md-3 mb-3" id="dateToDiv">
+                                <label class="form-label">To Date</label>
+                                <input type="date" class="form-control" name="date_to" value="{{ date_to }}">
+                            </div>
+
+                            <div class="col-md-2 mb-3">
+                                <label class="form-label">&nbsp;</label>
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <i class="bi bi-bar-chart"></i> Generate
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            {% if report_data %}
+            <!-- Report Results -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-success text-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="bi bi-clipboard-data"></i> 
+                            {% if report_type == 'section_performance' %}Section Performance Report
+                            {% elif report_type == 'user_productivity' %}User Productivity Report
+                            {% elif report_type == 'document_aging' %}Document Aging Report
+                            {% elif report_type == 'bottleneck_analysis' %}Bottleneck Analysis Report
+                            {% elif report_type == 'monthly_summary' %}Monthly Summary Report
+                            {% elif report_type == 'priority_analysis' %}Priority Analysis Report
+                            {% elif report_type == 'sla_compliance' %}SLA Compliance Report
+                            {% endif %}
+                        </h5>
+                        <button class="btn btn-light btn-sm" onclick="exportReport()">
+                            <i class="bi bi-file-earmark-excel"></i> Export
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    {% if date_from and date_to %}
+                    <p class="text-muted">
+                        <i class="bi bi-calendar-range"></i> Period: {{ date_from }} to {{ date_to }}
+                    </p>
+                    {% endif %}
+
+                    <!-- Section Performance Report -->
+                    {% if report_type == 'section_performance' %}
+                    <div class="table-responsive" id="reportTable">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Section</th>
+                                    <th>Total Documents</th>
+                                    <th>Avg Processing Time</th>
+                                    <th>Pending Items</th>
+                                    <th>Cleared Items</th>
+                                    <th>Performance</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in report_data %}
+                                <tr>
+                                    <td><strong>{{ row.section_name }}</strong></td>
+                                    <td>{{ row.total_docs }}</td>
+                                    <td>{{ row.avg_days|round(1) }} days</td>
+                                    <td>{{ row.pending }}</td>
+                                    <td>{{ row.cleared }}</td>
+                                    <td>
+                                        {% if row.avg_days < 3 %}
+                                        <span class="badge bg-success">Excellent</span>
+                                        {% elif row.avg_days < 7 %}
+                                        <span class="badge bg-primary">Good</span>
+                                        {% elif row.avg_days < 14 %}
+                                        <span class="badge bg-warning">Needs Improvement</span>
+                                        {% else %}
+                                        <span class="badge bg-danger">Critical</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <canvas id="sectionChart" width="400" height="150"></canvas>
+
+                    <!-- User Productivity Report -->
+                    {% elif report_type == 'user_productivity' %}
+                    <div class="table-responsive" id="reportTable">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>User</th>
+                                    <th>Section</th>
+                                    <th>Documents Processed</th>
+                                    <th>Avg Processing Time</th>
+                                    <th>Currently Holding</th>
+                                    <th>Rating</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in report_data %}
+                                <tr>
+                                    <td><strong>{{ row.full_name }}</strong></td>
+                                    <td>{{ row.section_name }}</td>
+                                    <td>{{ row.processed }}</td>
+                                    <td>{{ row.avg_days|round(1) }} days</td>
+                                    <td>{{ row.holding }}</td>
+                                    <td>
+                                        {% set score = (row.processed / (row.avg_days if row.avg_days > 0 else 1)) %}
+                                        {% if score > 5 %}
+                                        <span class="badge bg-success">★★★★★</span>
+                                        {% elif score > 3 %}
+                                        <span class="badge bg-primary">★★★★☆</span>
+                                        {% elif score > 1 %}
+                                        <span class="badge bg-warning">★★★☆☆</span>
+                                        {% else %}
+                                        <span class="badge bg-danger">★★☆☆☆</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Document Aging Report -->
+                    {% elif report_type == 'document_aging' %}
+                    <div class="row mb-4">
+                        <div class="col-md-3">
+                            <div class="card text-center">
+                                <div class="card-body">
+                                    <h3 class="text-success">{{ aging_summary.fresh }}</h3>
+                                    <small>0-3 Days (Fresh)</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card text-center">
+                                <div class="card-body">
+                                    <h3 class="text-primary">{{ aging_summary.moderate }}</h3>
+                                    <small>4-7 Days (Moderate)</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card text-center">
+                                <div class="card-body">
+                                    <h3 class="text-warning">{{ aging_summary.old }}</h3>
+                                    <small>8-14 Days (Old)</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card text-center">
+                                <div class="card-body">
+                                    <h3 class="text-danger">{{ aging_summary.critical }}</h3>
+                                    <small>15+ Days (Critical)</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="table-responsive" id="reportTable">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Document Number</th>
+                                    <th>Type</th>
+                                    <th>Subject</th>
+                                    <th>Current Holder</th>
+                                    <th>Days Held</th>
+                                    <th>Priority</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in report_data %}
+                                <tr>
+                                    <td><strong>{{ row.doc_number }}</strong></td>
+                                    <td>
+                                        {% if row.doc_type == 'notesheet' %}
+                                        <span class="badge bg-primary">NS</span>
+                                        {% else %}
+                                        <span class="badge bg-success">Bill</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ row.subject[:50] }}...</td>
+                                    <td>{{ row.holder_name }}</td>
+                                    <td>
+                                        {% if row.days_held > 14 %}
+                                        <span class="text-danger"><strong>{{ row.days_held }} days</strong></span>
+                                        {% elif row.days_held > 7 %}
+                                        <span class="text-warning"><strong>{{ row.days_held }} days</strong></span>
+                                        {% else %}
+                                        {{ row.days_held }} days
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-{{ 'danger' if row.priority == 'Urgent' else 'warning' if row.priority == 'High' else 'secondary' }}">
+                                            {{ row.priority }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if row.doc_type == 'notesheet' %}
+                                        <a href="{{ url_for('notesheet_detail', notesheet_id=row.doc_id) }}" class="btn btn-sm btn-primary">View</a>
+                                        {% else %}
+                                        <a href="{{ url_for('bill_detail', bill_id=row.doc_id) }}" class="btn btn-sm btn-primary">View</a>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <canvas id="agingChart" width="400" height="150"></canvas>
+
+                    <!-- Other Report Types -->
+                    {% else %}
+                    <div class="table-responsive" id="reportTable">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    {% for col in report_data[0].keys() %}
+                                    <th>{{ col|replace('_', ' ')|title }}</th>
+                                    {% endfor %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in report_data %}
+                                <tr>
+                                    {% for value in row.values() %}
+                                    <td>{{ value }}</td>
+                                    {% endfor %}
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+function updateDateFields() {
+    const reportType = document.getElementById('reportType').value;
+    // All reports use date range
+    document.getElementById('dateFromDiv').style.display = reportType ? 'block' : 'none';
+    document.getElementById('dateToDiv').style.display = reportType ? 'block' : 'none';
+}
+
+function exportReport() {
+    const table = document.getElementById('reportTable').querySelector('table');
+    let csv = '';
+    
+    // Headers
+    const headers = Array.from(table.querySelectorAll('thead th')).map(th => th.textContent.trim());
+    csv += headers.join(',') + '\n';
+    
+    // Rows
+    const rows = table.querySelectorAll('tbody tr');
+    rows.forEach(row => {
+        const cols = Array.from(row.querySelectorAll('td')).map(td => {
+            let text = td.textContent.trim().replace(/,/g, ';');
+            return `"${text}"`;
+        });
+        csv += cols.join(',') + '\n';
+    });
+    
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'report_' + new Date().toISOString().slice(0,10) + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+}
+
+// Initialize
+updateDateFields();
+
+// Charts
+{% if report_type == 'section_performance' and report_data %}
+const ctx1 = document.getElementById('sectionChart').getContext('2d');
+new Chart(ctx1, {
+    type: 'bar',
+    data: {
+        labels: {{ report_data|map(attribute='section_name')|list|tojson }},
+        datasets: [{
+            label: 'Avg Processing Days',
+            data: {{ report_data|map(attribute='avg_days')|list|tojson }},
+            backgroundColor: 'rgba(13, 110, 253, 0.5)',
+            borderColor: 'rgba(13, 110, 253, 1)',
+            borderWidth: 1
+        }]
+    },
+    options: {
+        responsive: true,
+        scales: {
+            y: {
+                beginAtZero: true,
+                title: { display: true, text: 'Days' }
+            }
+        }
+    }
+});
+{% endif %}
+
+{% if report_type == 'document_aging' and aging_summary %}
+const ctx2 = document.getElementById('agingChart').getContext('2d');
+new Chart(ctx2, {
+    type: 'doughnut',
+    data: {
+        labels: ['Fresh (0-3 days)', 'Moderate (4-7 days)', 'Old (8-14 days)', 'Critical (15+ days)'],
+        datasets: [{
+            data: [{{ aging_summary.fresh }}, {{ aging_summary.moderate }}, {{ aging_summary.old }}, {{ aging_summary.critical }}],
+            backgroundColor: ['#198754', '#0d6efd', '#ffc107', '#dc3545']
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: {
+            legend: { position: 'bottom' }
+        }
+    }
+});
+{% endif %}
+</script>
+{% endblock %}

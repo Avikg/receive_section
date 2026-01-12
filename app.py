@@ -151,8 +151,8 @@ def index():
 
 @app.route('/version')
 def version_check():
-    """Quick version check - DO NOT DELETE"""
-    return "VERSION: 2026-01-11-FIXED-FORWARDING-v4 | Lines: 1629"
+    """Quick version check"""
+    return "VERSION: 2026-01-12-WITH-SEARCH-REPORTS"
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -517,6 +517,538 @@ def my_bills():
     db.close()
     
     return render_template('bills/list.html', bills=bills, filter_type='my')
+
+
+"""
+COMPLETELY CLEAN Advanced Search Route
+NO movement_id, NO is_current - just uses main tables
+"""
+
+@app.route('/search/advanced', methods=['GET'])
+@login_required
+def advanced_search():
+    """Advanced search with multiple filters"""
+    db = WBSEDCLDatabase()
+    conn = db.connect()
+    cursor = conn.cursor()
+    
+    # Get filter parameters
+    doc_type = request.args.get('doc_type', 'all')
+    status = request.args.get('status', 'all')
+    priority = request.args.get('priority', 'all')
+    section_id = request.args.get('section_id', 'all')
+    holder_id = request.args.get('holder_id', 'all')
+    date_from = request.args.get('date_from', '')
+    date_to = request.args.get('date_to', '')
+    min_days = request.args.get('min_days', '')
+    keywords = request.args.get('keywords', '')
+    doc_number = request.args.get('doc_number', '')
+    sender = request.args.get('sender', '')
+    
+    results = []
+    
+    # Only search if at least one filter is applied
+    if any([doc_type != 'all', status != 'all', priority != 'all', 
+            section_id != 'all', holder_id != 'all', date_from, date_to, 
+            min_days, keywords, doc_number, sender]):
+        
+        # Search Notesheets
+        if doc_type in ['all', 'notesheet']:
+            ns_query = '''
+                SELECT 
+                    'notesheet' as doc_type,
+                    n.notesheet_id as doc_id,
+                    n.notesheet_number as doc_number,
+                    n.subject,
+                    n.sender_name,
+                    n.priority,
+                    n.is_parked,
+                    n.current_status as status,
+                    u.full_name as holder_name,
+                    s.section_name,
+                    n.received_date as in_date,
+                    CAST(julianday('now') - julianday(n.received_date) AS INTEGER) as days_held
+                FROM notesheets n
+                LEFT JOIN users u ON n.current_holder = u.user_id
+                LEFT JOIN sections s ON n.current_section_id = s.section_id
+                WHERE 1=1
+            '''
+            params = []
+            
+            if status == 'parked':
+                ns_query += ' AND n.is_parked = 1'
+            elif status == 'active':
+                ns_query += ' AND n.is_parked = 0'
+            
+            if priority != 'all':
+                ns_query += ' AND n.priority = ?'
+                params.append(priority)
+            
+            if section_id != 'all':
+                ns_query += ' AND n.current_section_id = ?'
+                params.append(section_id)
+            
+            if holder_id != 'all':
+                ns_query += ' AND n.current_holder = ?'
+                params.append(holder_id)
+            
+            if date_from:
+                ns_query += ' AND DATE(n.received_date) >= ?'
+                params.append(date_from)
+            
+            if date_to:
+                ns_query += ' AND DATE(n.received_date) <= ?'
+                params.append(date_to)
+            
+            if keywords:
+                ns_query += ' AND (n.subject LIKE ? OR n.notesheet_number LIKE ? OR n.sender_name LIKE ?)'
+                keyword_param = f'%{keywords}%'
+                params.extend([keyword_param, keyword_param, keyword_param])
+            
+            if doc_number:
+                ns_query += ' AND n.notesheet_number LIKE ?'
+                params.append(f'%{doc_number}%')
+            
+            if sender:
+                ns_query += ' AND n.sender_name LIKE ?'
+                params.append(f'%{sender}%')
+            
+            cursor.execute(ns_query, params)
+            ns_results = cursor.fetchall()
+            columns = [desc[0] for desc in cursor.description]
+            results.extend([dict(zip(columns, row)) for row in ns_results])
+        
+        # Search Bills
+        if doc_type in ['all', 'bill']:
+            bill_query = '''
+                SELECT 
+                    'bill' as doc_type,
+                    b.bill_id as doc_id,
+                    b.bill_number as doc_number,
+                    b.vendor_name as subject,
+                    b.vendor_name as sender_name,
+                    b.priority,
+                    b.is_parked,
+                    b.payment_status as status,
+                    u.full_name as holder_name,
+                    s.section_name,
+                    b.received_date as in_date,
+                    CAST(julianday('now') - julianday(b.received_date) AS INTEGER) as days_held
+                FROM bills b
+                LEFT JOIN users u ON b.current_holder = u.user_id
+                LEFT JOIN sections s ON b.current_section_id = s.section_id
+                WHERE 1=1
+            '''
+            params = []
+            
+            if status == 'parked':
+                bill_query += ' AND b.is_parked = 1'
+            elif status == 'active':
+                bill_query += ' AND b.is_parked = 0'
+            elif status == 'cleared':
+                bill_query += ' AND b.payment_status = "Paid"'
+            
+            if priority != 'all':
+                bill_query += ' AND b.priority = ?'
+                params.append(priority)
+            
+            if section_id != 'all':
+                bill_query += ' AND b.current_section_id = ?'
+                params.append(section_id)
+            
+            if holder_id != 'all':
+                bill_query += ' AND b.current_holder = ?'
+                params.append(holder_id)
+            
+            if date_from:
+                bill_query += ' AND DATE(b.received_date) >= ?'
+                params.append(date_from)
+            
+            if date_to:
+                bill_query += ' AND DATE(b.received_date) <= ?'
+                params.append(date_to)
+            
+            if keywords:
+                bill_query += ' AND (b.vendor_name LIKE ? OR b.bill_number LIKE ? OR b.invoice_number LIKE ?)'
+                keyword_param = f'%{keywords}%'
+                params.extend([keyword_param, keyword_param, keyword_param])
+            
+            if doc_number:
+                bill_query += ' AND b.bill_number LIKE ?'
+                params.append(f'%{doc_number}%')
+            
+            if sender:
+                bill_query += ' AND b.vendor_name LIKE ?'
+                params.append(f'%{sender}%')
+            
+            cursor.execute(bill_query, params)
+            bill_results = cursor.fetchall()
+            columns = [desc[0] for desc in cursor.description]
+            results.extend([dict(zip(columns, row)) for row in bill_results])
+        
+        # Filter by minimum days held
+        if min_days:
+            results = [r for r in results if r.get('days_held', 0) >= int(min_days)]
+        
+        # Sort by days_held descending
+        results.sort(key=lambda x: x.get('days_held', 0), reverse=True)
+    
+    # Get all sections for filter dropdown
+    sections = db.get_all_sections()
+    
+    # Get all users for filter dropdown
+    cursor.execute('SELECT user_id, username, full_name FROM users WHERE is_active = 1 ORDER BY full_name')
+    users = cursor.fetchall()
+    columns = [desc[0] for desc in cursor.description]
+    users = [dict(zip(columns, row)) for row in users]
+    
+    db.close()
+    
+    return render_template('advanced_search.html',
+                         results=results,
+                         sections=sections,
+                         users=users,
+                         filters={
+                             'doc_type': doc_type,
+                             'status': status,
+                             'priority': priority,
+                             'section_id': section_id,
+                             'holder_id': holder_id,
+                             'date_from': date_from,
+                             'date_to': date_to,
+                             'min_days': min_days,
+                             'keywords': keywords,
+                             'doc_number': doc_number,
+                             'sender': sender
+                         })
+
+"""
+ULTRA-SIMPLIFIED Advanced Reports Route
+Works without current_movement_id - uses current_holder only
+"""
+
+@app.route('/reports/advanced', methods=['GET'])
+@login_required
+def advanced_reports():
+    """Generate advanced reports"""
+    db = WBSEDCLDatabase()
+    conn = db.connect()
+    cursor = conn.cursor()
+    
+    report_type = request.args.get('report_type', '')
+    date_from = request.args.get('date_from', '')
+    date_to = request.args.get('date_to', '')
+    
+    report_data = None
+    aging_summary = None
+    
+    if report_type:
+        # Section Performance Report
+        if report_type == 'section_performance':
+            query = '''
+                SELECT 
+                    s.section_name,
+                    COUNT(DISTINCT n.notesheet_id) + COUNT(DISTINCT b.bill_id) as total_docs,
+                    AVG(julianday('now') - julianday(COALESCE(n.received_date, b.received_date))) as avg_days,
+                    SUM(CASE WHEN n.current_holder IS NOT NULL AND n.is_parked = 0 THEN 1 ELSE 0 END) +
+                    SUM(CASE WHEN b.current_holder IS NOT NULL AND b.is_parked = 0 THEN 1 ELSE 0 END) as pending,
+                    SUM(CASE WHEN n.current_status = 'Closed' THEN 1 ELSE 0 END) +
+                    SUM(CASE WHEN b.payment_status = 'Paid' THEN 1 ELSE 0 END) as cleared
+                FROM sections s
+                LEFT JOIN notesheets n ON s.section_id = n.current_section_id
+                LEFT JOIN bills b ON s.section_id = b.current_section_id
+                WHERE 1=1
+            '''
+            params = []
+            
+            if date_from:
+                query += ' AND (n.received_date >= ? OR b.received_date >= ?)'
+                params.extend([date_from, date_from])
+            
+            if date_to:
+                query += ' AND (n.received_date <= ? OR b.received_date <= ?)'
+                params.extend([date_to, date_to])
+            
+            query += ' GROUP BY s.section_id HAVING total_docs > 0 ORDER BY avg_days DESC'
+            
+            cursor.execute(query, params)
+            results = cursor.fetchall()
+            columns = [desc[0] for desc in cursor.description]
+            report_data = [dict(zip(columns, row)) for row in results]
+        
+        # User Productivity Report
+        elif report_type == 'user_productivity':
+            query = '''
+                SELECT 
+                    u.full_name,
+                    s.section_name,
+                    COUNT(DISTINCT nm.movement_id) + COUNT(DISTINCT bm.movement_id) as processed,
+                    AVG(julianday('now') - julianday(COALESCE(nm.forwarded_date, bm.forwarded_date))) as avg_days,
+                    COUNT(DISTINCT n.notesheet_id) + COUNT(DISTINCT b.bill_id) as holding
+                FROM users u
+                LEFT JOIN sections s ON u.section_id = s.section_id
+                LEFT JOIN notesheet_movements nm ON u.user_id = nm.from_user
+                LEFT JOIN bill_movements bm ON u.user_id = bm.from_user
+                LEFT JOIN notesheets n ON u.user_id = n.current_holder
+                LEFT JOIN bills b ON u.user_id = b.current_holder
+                WHERE u.is_active = 1 AND u.is_superuser = 0
+            '''
+            params = []
+            
+            if date_from:
+                query += ' AND (nm.forwarded_date >= ? OR bm.forwarded_date >= ?)'
+                params.extend([date_from, date_from])
+            
+            if date_to:
+                query += ' AND (nm.forwarded_date <= ? OR bm.forwarded_date <= ?)'
+                params.extend([date_to, date_to])
+            
+            query += ' GROUP BY u.user_id HAVING processed > 0 ORDER BY processed DESC LIMIT 20'
+            
+            cursor.execute(query, params)
+            results = cursor.fetchall()
+            columns = [desc[0] for desc in cursor.description]
+            report_data = [dict(zip(columns, row)) for row in results]
+        
+        # Document Aging Report (SIMPLIFIED)
+        elif report_type == 'document_aging':
+            # Get aging summary - using received_date as proxy
+            cursor.execute('''
+                SELECT 
+                    SUM(CASE WHEN days_held <= 3 THEN 1 ELSE 0 END) as fresh,
+                    SUM(CASE WHEN days_held > 3 AND days_held <= 7 THEN 1 ELSE 0 END) as moderate,
+                    SUM(CASE WHEN days_held > 7 AND days_held <= 14 THEN 1 ELSE 0 END) as old,
+                    SUM(CASE WHEN days_held > 14 THEN 1 ELSE 0 END) as critical
+                FROM (
+                    SELECT 
+                        CAST(julianday('now') - julianday(received_date) AS INTEGER) as days_held
+                    FROM notesheets
+                    WHERE is_parked = 0 AND current_holder IS NOT NULL
+                    UNION ALL
+                    SELECT 
+                        CAST(julianday('now') - julianday(received_date) AS INTEGER) as days_held
+                    FROM bills
+                    WHERE is_parked = 0 AND current_holder IS NOT NULL
+                )
+            ''')
+            aging_result = cursor.fetchone()
+            aging_summary = dict(zip(['fresh', 'moderate', 'old', 'critical'], aging_result)) if aging_result else {'fresh': 0, 'moderate': 0, 'old': 0, 'critical': 0}
+            
+            # Get detailed aging data
+            query = '''
+                SELECT 
+                    'notesheet' as doc_type,
+                    n.notesheet_id as doc_id,
+                    n.notesheet_number as doc_number,
+                    n.subject,
+                    u.full_name as holder_name,
+                    n.priority,
+                    CAST(julianday('now') - julianday(n.received_date) AS INTEGER) as days_held
+                FROM notesheets n
+                LEFT JOIN users u ON n.current_holder = u.user_id
+                WHERE n.is_parked = 0 AND n.current_holder IS NOT NULL
+                UNION ALL
+                SELECT 
+                    'bill' as doc_type,
+                    b.bill_id as doc_id,
+                    b.bill_number as doc_number,
+                    b.vendor_name as subject,
+                    u.full_name as holder_name,
+                    b.priority,
+                    CAST(julianday('now') - julianday(b.received_date) AS INTEGER) as days_held
+                FROM bills b
+                LEFT JOIN users u ON b.current_holder = u.user_id
+                WHERE b.is_parked = 0 AND b.current_holder IS NOT NULL
+                ORDER BY days_held DESC
+                LIMIT 50
+            '''
+            
+            cursor.execute(query)
+            results = cursor.fetchall()
+            columns = [desc[0] for desc in cursor.description]
+            report_data = [dict(zip(columns, row)) for row in results]
+        
+        # Bottleneck Analysis Report
+        elif report_type == 'bottleneck_analysis':
+            query = '''
+                SELECT 
+                    s.section_name,
+                    u.full_name as user_name,
+                    COUNT(DISTINCT n.notesheet_id) + COUNT(DISTINCT b.bill_id) as pending_count,
+                    AVG(julianday('now') - julianday(COALESCE(n.received_date, b.received_date))) as avg_wait_days,
+                    MAX(julianday('now') - julianday(COALESCE(n.received_date, b.received_date))) as max_wait_days
+                FROM users u
+                JOIN sections s ON u.section_id = s.section_id
+                LEFT JOIN notesheets n ON u.user_id = n.current_holder AND n.is_parked = 0
+                LEFT JOIN bills b ON u.user_id = b.current_holder AND b.is_parked = 0
+                WHERE u.is_active = 1
+                GROUP BY u.user_id
+                HAVING pending_count > 2
+                ORDER BY avg_wait_days DESC, pending_count DESC
+                LIMIT 20
+            '''
+            
+            cursor.execute(query)
+            results = cursor.fetchall()
+            columns = [desc[0] for desc in cursor.description]
+            report_data = [dict(zip(columns, row)) for row in results]
+        
+        # Monthly Summary Report
+        elif report_type == 'monthly_summary':
+            query = '''
+                SELECT 
+                    month,
+                    SUM(notesheets_received) as notesheets_received,
+                    SUM(bills_received) as bills_received,
+                    SUM(notesheets_cleared) as notesheets_cleared,
+                    SUM(bills_paid) as bills_paid,
+                    AVG(CASE WHEN avg_notesheet_days > 0 THEN avg_notesheet_days END) as avg_notesheet_days,
+                    AVG(CASE WHEN avg_bill_days > 0 THEN avg_bill_days END) as avg_bill_days
+                FROM (
+                    SELECT 
+                        strftime('%Y-%m', received_date) as month,
+                        COUNT(*) as notesheets_received,
+                        0 as bills_received,
+                        SUM(CASE WHEN current_status = 'Closed' THEN 1 ELSE 0 END) as notesheets_cleared,
+                        0 as bills_paid,
+                        AVG(julianday('now') - julianday(received_date)) as avg_notesheet_days,
+                        0 as avg_bill_days
+                    FROM notesheets
+                    WHERE strftime('%Y-%m', received_date) >= strftime('%Y-%m', 'now', '-12 months')
+                    GROUP BY month
+                    UNION ALL
+                    SELECT 
+                        strftime('%Y-%m', received_date) as month,
+                        0 as notesheets_received,
+                        COUNT(*) as bills_received,
+                        0 as notesheets_cleared,
+                        SUM(CASE WHEN payment_status = 'Paid' THEN 1 ELSE 0 END) as bills_paid,
+                        0 as avg_notesheet_days,
+                        AVG(julianday('now') - julianday(received_date)) as avg_bill_days
+                    FROM bills
+                    WHERE strftime('%Y-%m', received_date) >= strftime('%Y-%m', 'now', '-12 months')
+                    GROUP BY month
+                )
+                GROUP BY month
+                ORDER BY month DESC
+                LIMIT 12
+            '''
+            
+            cursor.execute(query)
+            results = cursor.fetchall()
+            columns = [desc[0] for desc in cursor.description]
+            report_data = [dict(zip(columns, row)) for row in results]
+        
+        # Priority Analysis Report
+        elif report_type == 'priority_analysis':
+            query = '''
+                SELECT 
+                    priority,
+                    'Notesheet' as doc_type,
+                    COUNT(*) as total_count,
+                    SUM(CASE WHEN is_parked = 0 AND current_status != 'Closed' THEN 1 ELSE 0 END) as active_count,
+                    SUM(CASE WHEN is_parked = 1 THEN 1 ELSE 0 END) as parked_count,
+                    AVG(julianday('now') - julianday(received_date)) as avg_age_days
+                FROM notesheets
+                GROUP BY priority
+                UNION ALL
+                SELECT 
+                    priority,
+                    'Bill' as doc_type,
+                    COUNT(*) as total_count,
+                    SUM(CASE WHEN is_parked = 0 AND payment_status = 'Pending' THEN 1 ELSE 0 END) as active_count,
+                    SUM(CASE WHEN is_parked = 1 THEN 1 ELSE 0 END) as parked_count,
+                    AVG(julianday('now') - julianday(received_date)) as avg_age_days
+                FROM bills
+                GROUP BY priority
+                ORDER BY priority, doc_type
+            '''
+            
+            cursor.execute(query)
+            results = cursor.fetchall()
+            columns = [desc[0] for desc in cursor.description]
+            report_data = [dict(zip(columns, row)) for row in results]
+        
+        # SLA Compliance Report
+        elif report_type == 'sla_compliance':
+            # Define SLA limits (in days)
+            SLA_LIMITS = {
+                'Urgent': 2,
+                'High': 5,
+                'Normal': 10
+            }
+            
+            report_data = []
+            
+            for priority, sla_days in SLA_LIMITS.items():
+                # Notesheets - using received_date since no movement date available
+                cursor.execute('''
+                    SELECT 
+                        COUNT(*) as total,
+                        SUM(CASE 
+                            WHEN CAST(julianday('now') - julianday(received_date) AS INTEGER) <= ? 
+                            THEN 1 ELSE 0 
+                        END) as within_sla,
+                        SUM(CASE 
+                            WHEN CAST(julianday('now') - julianday(received_date) AS INTEGER) > ? 
+                            THEN 1 ELSE 0 
+                        END) as breached_sla
+                    FROM notesheets
+                    WHERE priority = ? AND is_parked = 0 AND current_holder IS NOT NULL
+                ''', (sla_days, sla_days, priority))
+                
+                ns_result = cursor.fetchone()
+                
+                if ns_result and ns_result[0] > 0:
+                    compliance = (ns_result[1] / ns_result[0]) * 100 if ns_result[0] > 0 else 0
+                    report_data.append({
+                        'priority': priority,
+                        'doc_type': 'Notesheet',
+                        'sla_days': sla_days,
+                        'total_docs': ns_result[0],
+                        'within_sla': ns_result[1],
+                        'breached_sla': ns_result[2],
+                        'compliance_percent': round(compliance, 1)
+                    })
+                
+                # Bills
+                cursor.execute('''
+                    SELECT 
+                        COUNT(*) as total,
+                        SUM(CASE 
+                            WHEN CAST(julianday('now') - julianday(received_date) AS INTEGER) <= ? 
+                            THEN 1 ELSE 0 
+                        END) as within_sla,
+                        SUM(CASE 
+                            WHEN CAST(julianday('now') - julianday(received_date) AS INTEGER) > ? 
+                            THEN 1 ELSE 0 
+                        END) as breached_sla
+                    FROM bills
+                    WHERE priority = ? AND is_parked = 0 AND current_holder IS NOT NULL
+                ''', (sla_days, sla_days, priority))
+                
+                bill_result = cursor.fetchone()
+                
+                if bill_result and bill_result[0] > 0:
+                    compliance = (bill_result[1] / bill_result[0]) * 100 if bill_result[0] > 0 else 0
+                    report_data.append({
+                        'priority': priority,
+                        'doc_type': 'Bill',
+                        'sla_days': sla_days,
+                        'total_docs': bill_result[0],
+                        'within_sla': bill_result[1],
+                        'breached_sla': bill_result[2],
+                        'compliance_percent': round(compliance, 1)
+                    })
+    
+    db.close()
+    
+    return render_template('advanced_reports.html',
+                         report_type=report_type,
+                         report_data=report_data,
+                         aging_summary=aging_summary,
+                         date_from=date_from,
+                         date_to=date_to)
 
 # Notesheet routes
 

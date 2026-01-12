@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block title %}Page Not Found - WBSEDCL{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center align-items-center" style="min-height: 80vh;">
+        <div class="col-md-8 col-lg-6 text-center">
+            <div class="error-content">
+                <div class="mb-4">
+                    <i class="bi bi-exclamation-triangle-fill text-warning" style="font-size: 5rem;"></i>
+                </div>
+                
+                <h1 class="display-1 text-primary fw-bold">404</h1>
+                <h2 class="mb-4">Page Not Found</h2>
+                <p class="lead text-muted mb-4">
+                    The page you're looking for doesn't exist or has been moved.
+                </p>
+                
+                <div class="alert alert-info" role="alert">
+                    <i class="bi bi-info-circle"></i> 
+                    <strong>Requested URL:</strong> {{ request.path }}
+                </div>
+                
+                <div class="d-grid gap-2 d-md-flex justify-content-md-center mt-4">
+                    {% if current_user.is_authenticated %}
+                    <a href="{{ url_for('dashboard') }}" class="btn btn-primary btn-lg">
+                        <i class="bi bi-speedometer2"></i> Go to Dashboard
+                    </a>
+                    {% else %}
+                    <a href="{{ url_for('login') }}" class="btn btn-primary btn-lg">
+                        <i class="bi bi-box-arrow-in-right"></i> Go to Login
+                    </a>
+                    {% endif %}
+                    
+                    <button onclick="history.back()" class="btn btn-secondary btn-lg">
+                        <i class="bi bi-arrow-left"></i> Go Back
+                    </button>
+                </div>
+                
+                <div class="mt-5">
+                    <p class="text-muted">
+                        <small><i class="bi bi-shield-check"></i> If you believe this is an error, please contact the system administrator.</small>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.error-content h1 {
+    font-size: 8rem;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+    margin: 20px 0;
+}
+
+.error-content h2 {
+    font-size: 2.5rem;
+    color: #333;
+}
+
+.error-content .lead {
+    font-size: 1.2rem;
+}
+
+@media (max-width: 768px) {
+    .error-content h1 {
+        font-size: 5rem;
+    }
+    
+    .error-content h2 {
+        font-size: 1.8rem;
+    }
+    
+    .error-content .lead {
+        font-size: 1rem;
+    }
+}
+
+.btn-lg {
+    padding: 12px 30px;
+    font-size: 1.1rem;
+}
+</style>
+{% endblock %}

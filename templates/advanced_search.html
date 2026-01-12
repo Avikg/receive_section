@@ -1,0 +1,282 @@
+{% extends "base.html" %}
+
+{% block title %}Advanced Search - WBSEDCL{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2><i class="bi bi-search"></i> Advanced Search</h2>
+                <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">
+                    <i class="bi bi-arrow-left"></i> Back to Dashboard
+                </a>
+            </div>
+
+            <!-- Search Form -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-funnel"></i> Search Filters</h5>
+                </div>
+                <div class="card-body">
+                    <form method="GET" action="{{ url_for('advanced_search') }}" id="searchForm">
+                        <div class="row">
+                            <!-- Document Type -->
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label">Document Type</label>
+                                <select class="form-select" name="doc_type" id="doc_type">
+                                    <option value="all" {% if filters.doc_type == 'all' %}selected{% endif %}>All Documents</option>
+                                    <option value="notesheet" {% if filters.doc_type == 'notesheet' %}selected{% endif %}>Notesheets Only</option>
+                                    <option value="bill" {% if filters.doc_type == 'bill' %}selected{% endif %}>Bills Only</option>
+                                </select>
+                            </div>
+
+                            <!-- Status -->
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label">Status</label>
+                                <select class="form-select" name="status">
+                                    <option value="all" {% if filters.status == 'all' %}selected{% endif %}>All Status</option>
+                                    <option value="active" {% if filters.status == 'active' %}selected{% endif %}>Active</option>
+                                    <option value="parked" {% if filters.status == 'parked' %}selected{% endif %}>Parked</option>
+                                    <option value="cleared" {% if filters.status == 'cleared' %}selected{% endif %}>Cleared</option>
+                                </select>
+                            </div>
+
+                            <!-- Priority -->
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label">Priority</label>
+                                <select class="form-select" name="priority">
+                                    <option value="all" {% if filters.priority == 'all' %}selected{% endif %}>All Priorities</option>
+                                    <option value="Urgent" {% if filters.priority == 'Urgent' %}selected{% endif %}>Urgent</option>
+                                    <option value="High" {% if filters.priority == 'High' %}selected{% endif %}>High</option>
+                                    <option value="Normal" {% if filters.priority == 'Normal' %}selected{% endif %}>Normal</option>
+                                </select>
+                            </div>
+
+                            <!-- Current Section -->
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label">Current Section</label>
+                                <select class="form-select" name="section_id">
+                                    <option value="all" {% if filters.section_id == 'all' %}selected{% endif %}>All Sections</option>
+                                    {% for section in sections %}
+                                    <option value="{{ section.section_id }}" {% if filters.section_id == section.section_id|string %}selected{% endif %}>
+                                        {{ section.section_name }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <!-- Current Holder -->
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label">Current Holder</label>
+                                <select class="form-select" name="holder_id">
+                                    <option value="all" {% if filters.holder_id == 'all' %}selected{% endif %}>All Users</option>
+                                    {% for user in users %}
+                                    <option value="{{ user.user_id }}" {% if filters.holder_id == user.user_id|string %}selected{% endif %}>
+                                        {{ user.full_name }} ({{ user.username }})
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <!-- Date From -->
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label">Date From</label>
+                                <input type="date" class="form-control" name="date_from" value="{{ filters.date_from }}">
+                            </div>
+
+                            <!-- Date To -->
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label">Date To</label>
+                                <input type="date" class="form-control" name="date_to" value="{{ filters.date_to }}">
+                            </div>
+
+                            <!-- Days Held (Min) -->
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label">Min Days Held</label>
+                                <input type="number" class="form-control" name="min_days" value="{{ filters.min_days }}" min="0" placeholder="e.g., 3">
+                            </div>
+
+                            <!-- Keyword Search -->
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Search Keywords</label>
+                                <input type="text" class="form-control" name="keywords" value="{{ filters.keywords }}" 
+                                       placeholder="Search in number, subject, sender...">
+                            </div>
+
+                            <!-- Number Search -->
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label">Document Number</label>
+                                <input type="text" class="form-control" name="doc_number" value="{{ filters.doc_number }}" 
+                                       placeholder="e.g., NS/2024/001">
+                            </div>
+
+                            <!-- Sender Name -->
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label">Sender Name</label>
+                                <input type="text" class="form-control" name="sender" value="{{ filters.sender }}" 
+                                       placeholder="Sender name">
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-search"></i> Search
+                                </button>
+                                <a href="{{ url_for('advanced_search') }}" class="btn btn-secondary">
+                                    <i class="bi bi-x-circle"></i> Clear Filters
+                                </a>
+                            </div>
+                            <div>
+                                <button type="button" class="btn btn-success" onclick="exportResults()">
+                                    <i class="bi bi-file-earmark-excel"></i> Export to Excel
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Results Summary -->
+            {% if results %}
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle"></i> Found <strong>{{ results|length }}</strong> document(s) matching your criteria
+            </div>
+
+            <!-- Results Table -->
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="resultsTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Type</th>
+                                    <th>Number</th>
+                                    <th>Subject</th>
+                                    <th>Sender</th>
+                                    <th>Priority</th>
+                                    <th>Current Holder</th>
+                                    <th>Section</th>
+                                    <th>Days Held</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for doc in results %}
+                                <tr>
+                                    <td>
+                                        {% if doc.doc_type == 'notesheet' %}
+                                        <span class="badge bg-primary">Notesheet</span>
+                                        {% else %}
+                                        <span class="badge bg-success">Bill</span>
+                                        {% endif %}
+                                    </td>
+                                    <td><strong>{{ doc.doc_number }}</strong></td>
+                                    <td>{{ doc.subject[:50] }}{% if doc.subject|length > 50 %}...{% endif %}</td>
+                                    <td>{{ doc.sender_name }}</td>
+                                    <td>
+                                        {% if doc.priority == 'Urgent' %}
+                                        <span class="badge bg-danger">{{ doc.priority }}</span>
+                                        {% elif doc.priority == 'High' %}
+                                        <span class="badge bg-warning">{{ doc.priority }}</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">{{ doc.priority }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ doc.holder_name }}</td>
+                                    <td><small>{{ doc.section_name }}</small></td>
+                                    <td>
+                                        {% if doc.days_held > 7 %}
+                                        <span class="text-danger"><strong>{{ doc.days_held }} days</strong></span>
+                                        {% elif doc.days_held > 3 %}
+                                        <span class="text-warning"><strong>{{ doc.days_held }} days</strong></span>
+                                        {% else %}
+                                        {{ doc.days_held }} days
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if doc.is_parked %}
+                                        <span class="badge bg-warning">Parked</span>
+                                        {% elif doc.status == 'Cleared' %}
+                                        <span class="badge bg-success">Cleared</span>
+                                        {% else %}
+                                        <span class="badge bg-info">Active</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if doc.doc_type == 'notesheet' %}
+                                        <a href="{{ url_for('notesheet_detail', notesheet_id=doc.doc_id) }}" 
+                                           class="btn btn-sm btn-primary">
+                                            <i class="bi bi-eye"></i> View
+                                        </a>
+                                        {% else %}
+                                        <a href="{{ url_for('bill_detail', bill_id=doc.doc_id) }}" 
+                                           class="btn btn-sm btn-primary">
+                                            <i class="bi bi-eye"></i> View
+                                        </a>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            {% elif filters.keywords or filters.doc_number %}
+            <div class="alert alert-warning">
+                <i class="bi bi-exclamation-triangle"></i> No documents found matching your search criteria.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+function exportResults() {
+    const table = document.getElementById('resultsTable');
+    let csv = 'Type,Number,Subject,Sender,Priority,Current Holder,Section,Days Held,Status\n';
+    
+    const rows = table.querySelectorAll('tbody tr');
+    rows.forEach(row => {
+        const cols = row.querySelectorAll('td');
+        const type = cols[0].textContent.trim();
+        const number = cols[1].textContent.trim();
+        const subject = cols[2].textContent.trim().replace(/,/g, ';');
+        const sender = cols[3].textContent.trim();
+        const priority = cols[4].textContent.trim();
+        const holder = cols[5].textContent.trim();
+        const section = cols[6].textContent.trim();
+        const days = cols[7].textContent.trim();
+        const status = cols[8].textContent.trim();
+        
+        csv += `"${type}","${number}","${subject}","${sender}","${priority}","${holder}","${section}","${days}","${status}"\n`;
+    });
+    
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'search_results_' + new Date().toISOString().slice(0,10) + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+}
+</script>
+
+<style>
+.table-responsive {
+    max-height: 600px;
+    overflow-y: auto;
+}
+.table thead {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+</style>
+{% endblock %}
