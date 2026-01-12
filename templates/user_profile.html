@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+
+{% block title %}My Profile - WBSEDCL{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0"><i class="bi bi-person-circle"></i> My Profile</h4>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('user_profile') }}">
+                        <!-- Username -->
+                        <div class="mb-3">
+                            <label class="form-label">Username</label>
+                            <input type="text" class="form-control" value="{{ user.username }}" 
+                                   {% if not current_user.is_superuser %}disabled{% endif %}
+                                   name="username">
+                            {% if not current_user.is_superuser %}
+                            <small class="text-muted">Username cannot be changed. Contact administrator.</small>
+                            {% endif %}
+                        </div>
+
+                        <!-- Full Name -->
+                        <div class="mb-3">
+                            <label class="form-label">Full Name *</label>
+                            <input type="text" class="form-control" name="full_name" 
+                                   value="{{ user.full_name }}" required>
+                        </div>
+
+                        <!-- Email -->
+                        <div class="mb-3">
+                            <label class="form-label">Email</label>
+                            <input type="email" class="form-control" name="email" 
+                                   value="{{ user.email or '' }}">
+                        </div>
+
+                        <!-- Phone -->
+                        <div class="mb-3">
+                            <label class="form-label">Phone</label>
+                            <input type="text" class="form-control" name="phone" 
+                                   value="{{ user.phone or '' }}">
+                        </div>
+
+                        <!-- Section (Read-only for non-superuser) -->
+                        <div class="mb-3">
+                            <label class="form-label">Section</label>
+                            {% if current_user.is_superuser %}
+                            <select class="form-select" name="section_id">
+                                {% for section in sections %}
+                                <option value="{{ section.section_id }}" 
+                                        {% if section.section_id == user.section_id %}selected{% endif %}>
+                                    {{ section.section_name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            {% else %}
+                            <input type="text" class="form-control" value="{{ user.section_name }}" disabled>
+                            <small class="text-muted">Section cannot be changed. Contact administrator.</small>
+                            {% endif %}
+                        </div>
+
+                        <!-- Designation -->
+                        <div class="mb-3">
+                            <label class="form-label">Designation</label>
+                            <input type="text" class="form-control" name="designation" 
+                                   value="{{ user.designation or '' }}">
+                        </div>
+
+                        <!-- Current Roles (Read-only) -->
+                        <div class="mb-3">
+                            <label class="form-label">Current Roles</label>
+                            <div>
+                                {% if user.is_superuser %}
+                                <span class="badge bg-danger me-1">Superuser</span>
+                                {% endif %}
+                                {% if user.roles %}
+                                    {% for role in user.roles.split(',') %}
+                                    <span class="badge bg-primary me-1">{{ role }}</span>
+                                    {% endfor %}
+                                {% else %}
+                                <span class="text-muted">No roles assigned</span>
+                                {% endif %}
+                            </div>
+                            <small class="text-muted">Contact administrator to change roles.</small>
+                        </div>
+
+                        <hr>
+
+                        <!-- Change Password Section -->
+                        <h5 class="mb-3"><i class="bi bi-key"></i> Change Password</h5>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Current Password</label>
+                            <input type="password" class="form-control" name="current_password" 
+                                   id="current_password">
+                            <small class="text-muted">Required only if changing password</small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">New Password</label>
+                            <input type="password" class="form-control" name="new_password" 
+                                   id="new_password">
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Confirm New Password</label>
+                            <input type="password" class="form-control" name="confirm_password" 
+                                   id="confirm_password">
+                        </div>
+
+                        <hr>
+
+                        <!-- Account Info -->
+                        <div class="mb-3">
+                            <label class="form-label">Account Status</label>
+                            <div>
+                                {% if user.is_active %}
+                                <span class="badge bg-success">Active</span>
+                                {% else %}
+                                <span class="badge bg-danger">Inactive</span>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Last Login</label>
+                            <div class="text-muted">{{ user.last_login or 'Never' }}</div>
+                        </div>
+
+                        <!-- Buttons -->
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">
+                                <i class="bi bi-arrow-left"></i> Back to Dashboard
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-save"></i> Save Changes
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.form-label {
+    font-weight: 500;
+}
+</style>
+{% endblock %}

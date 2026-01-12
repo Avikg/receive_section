@@ -1,6 +1,6 @@
 # WBSEDCL Document Tracking System
 
-A comprehensive web-based document tracking system for managing notesheets and bills with role-based access control, section-wise workflow management, and real-time document movement tracking.
+A comprehensive web-based document tracking system for managing notesheets and bills with role-based access control, section-wise workflow management, real-time document movement tracking, and advanced admin monitoring.
 
 ![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)
 ![Flask](https://img.shields.io/badge/Flask-3.0+-green.svg)
@@ -17,6 +17,8 @@ A comprehensive web-based document tracking system for managing notesheets and b
 - [User Roles & Permissions](#user-roles--permissions)
 - [Forwarding Rules](#forwarding-rules)
 - [Usage Guide](#usage-guide)
+- [Admin Features](#admin-features)
+- [Security Features](#security-features)
 - [Project Structure](#project-structure)
 - [Configuration](#configuration)
 - [Troubleshooting](#troubleshooting)
@@ -30,6 +32,7 @@ A comprehensive web-based document tracking system for managing notesheets and b
   - Bill tracking with payment status monitoring
   - Document parking for pending items
   - Custom forward dates for backdated entries
+  - Complete movement history with time tracking
 
 - **Role-Based Access Control**
   - Superuser: Full system access and user management
@@ -43,13 +46,38 @@ A comprehensive web-based document tracking system for managing notesheets and b
   - Time-held calculation (days at each location)
   - Section-wise routing with user identification
   - Real-time status updates
+  - Section head names displayed in movement history
 
 - **Advanced Features**
   - Cascading dropdowns for section → user selection
   - Personalized dashboard showing user's documents
-  - Activity logging for all actions
+  - Activity logging with session tracking
   - Search and filter capabilities
   - Priority-based document handling
+  - User profile management
+  - Failed login attempt tracking
+
+### Admin Monitoring Features
+- **Admin Dashboard**
+  - System statistics (active users, sessions, documents)
+  - Failed login monitoring (24-hour tracking)
+  - Top active users (7-day analysis)
+  - Daily activity charts
+  - Real-time activity feed
+
+- **Activity Logs**
+  - Advanced filtering (type, user, date range)
+  - Session-based activity grouping
+  - Export to CSV functionality
+  - Comprehensive audit trail
+  - IP address tracking
+
+- **Security Monitoring**
+  - Failed login attempt logging (with attempted username)
+  - Session tracking (unique session IDs)
+  - User activity timeline
+  - Suspicious pattern detection
+  - System user tracking for unknown login attempts
 
 ### UI/UX Features
 - Responsive Bootstrap 5 interface
@@ -58,6 +86,8 @@ A comprehensive web-based document tracking system for managing notesheets and b
 - Section head names in movement history
 - Permission-based button visibility
 - Hover effects and transitions
+- Color-coded activity badges
+- Empty state messages based on permissions
 
 ## 🏗️ System Architecture
 
@@ -67,14 +97,15 @@ A comprehensive web-based document tracking system for managing notesheets and b
 ├─────────────────────────────────────────────────────────────┤
 │  Authentication Layer (Flask-Login)                          │
 │  ├── User Management                                         │
-│  ├── Session Management                                      │
+│  ├── Session Management (UUID-based)                         │
 │  └── Permission Checking                                     │
 ├─────────────────────────────────────────────────────────────┤
 │  Business Logic Layer                                        │
 │  ├── Notesheet Management                                    │
 │  ├── Bill Management                                         │
 │  ├── Forwarding Rules Engine                                │
-│  └── Activity Logging                                        │
+│  ├── Activity Logging with Sessions                         │
+│  └── Failed Login Tracking                                  │
 ├─────────────────────────────────────────────────────────────┤
 │  Data Access Layer (WBSEDCLDatabase)                        │
 │  ├── SQLite Connection Pool                                  │
@@ -86,7 +117,7 @@ A comprehensive web-based document tracking system for managing notesheets and b
 │  ├── sections, sub_sections                                 │
 │  ├── notesheets, notesheet_movements                        │
 │  ├── bills, bill_movements                                   │
-│  └── activity_logs                                           │
+│  └── activity_logs (with session_id tracking)              │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -134,14 +165,20 @@ This creates:
 - All required tables with relationships
 - Default sections and roles
 - Default admin user
+- System user (ID=0) for failed login tracking
 
-### Step 5: Add Section Head Permission
+### Step 5: Add Required Columns
 
 ```powershell
+# Add section head permission column
 python add_is_section_head_column.py
-```
 
-This adds the `is_section_head` column to the `user_roles` table.
+# Add system user for failed login tracking
+python add_system_user.py
+
+# Add session tracking (optional but recommended)
+python add_session_tracking.py
+```
 
 ### Step 6: Run the Application
 
@@ -158,7 +195,7 @@ Username: admin
 Password: admin123
 ```
 
-**Important:** Change the admin password immediately after first login!
+**Important:** Change the admin password immediately after first login via Profile page!
 
 ## 🗄️ Database Setup
 
@@ -178,7 +215,7 @@ wbsedcl_tracking.db
 ├── bill_movements          # Bill routing history
 ├── notesheet_attachments   # File attachments (future)
 ├── bill_attachments        # File attachments (future)
-└── activity_logs           # Audit trail
+└── activity_logs           # Audit trail with session tracking
 ```
 
 ### Default Data Created
@@ -203,6 +240,10 @@ Admin (Superuser):
   Username: admin
   Password: admin123
   Section: Receive Section
+
+System User (ID: 0):
+  Username: system
+  Purpose: Track failed logins with unknown usernames
 ```
 
 ## 👥 User Roles & Permissions
@@ -217,7 +258,15 @@ Admin (Superuser):
 - ✅ Edit notesheet/bill details
 - ✅ Modify movement history
 - ✅ View all documents
-- ✅ Access admin panel
+- ✅ Access admin dashboard
+- ✅ View activity logs
+- ✅ Change own username and section
+
+**Use Cases:**
+- System administration
+- User management
+- Data correction
+- Security monitoring
 
 ### Receive Section
 **Access Level:** Document intake and routing
@@ -229,6 +278,12 @@ Admin (Superuser):
 - ✅ View parked items
 - ✅ Search all documents
 
+**Use Cases:**
+- Initial document receipt
+- Document registration
+- Routing to appropriate sections
+- Managing parked documents
+
 ### Section Head
 **Access Level:** Section management
 
@@ -238,6 +293,12 @@ Admin (Superuser):
 - ✅ Forward to receive section
 - ✅ View section documents
 - ❌ Cannot receive new documents
+- ❌ Cannot change username or section
+
+**Use Cases:**
+- Managing section workflow
+- Distributing work within section
+- Coordinating with other sections
 
 ### Section Member
 **Access Level:** Basic document handling
@@ -245,8 +306,15 @@ Admin (Superuser):
 **Permissions:**
 - ✅ Forward to section head only
 - ✅ View assigned documents
+- ✅ Update profile (email, phone, designation)
 - ❌ Cannot receive documents
 - ❌ Cannot forward outside section
+- ❌ Cannot change username or section
+
+**Use Cases:**
+- Processing assigned documents
+- Reporting to section head
+- Basic document handling
 
 ### Viewer
 **Access Level:** Read-only monitoring
@@ -257,6 +325,11 @@ Admin (Superuser):
 - ❌ Cannot forward
 - ❌ Cannot receive
 - ❌ Cannot edit
+
+**Use Cases:**
+- Management oversight
+- Status monitoring
+- Report generation
 
 ## 🔀 Forwarding Rules
 
@@ -277,10 +350,32 @@ Admin (Superuser):
 
 ## 📖 Usage Guide
 
+### For All Users
+
+#### Accessing Profile
+1. Click your name in top-right corner
+2. Select **Profile**
+3. Update your information:
+   - Full Name
+   - Email
+   - Phone
+   - Designation
+   - Change Password (requires current password)
+4. Click **Save Changes**
+
+**Note:** 
+- Username and Section are read-only (except for superusers)
+- Password change requires current password verification
+
+#### Viewing Your Documents
+1. Click **Dashboard**
+2. Click **My Notesheets** or **My Bills** card
+3. All documents currently assigned to you are displayed
+
 ### For Receive Section Users
 
 #### Receiving a Notesheet
-1. Click **Dashboard** → **Receive Notesheet**
+1. Click **Receive** → **Receive Notesheet**
 2. Fill in required fields:
    - Notesheet Number (unique)
    - Subject
@@ -301,11 +396,6 @@ Admin (Superuser):
 3. Click **Forward**
 
 ### For Section Heads
-
-#### Viewing Your Documents
-1. Click **Dashboard** → Click **My Notesheets** card
-2. All documents currently with you are displayed
-3. Click **View** to see details
 
 #### Distributing Work
 1. Open document detail page
@@ -343,6 +433,54 @@ Admin (Superuser):
    - Superuser status
 4. Click **Save Changes**
 
+#### Viewing Activity Logs
+1. Go to **Admin** → **Activity Logs**
+2. Use filters:
+   - Activity Type
+   - User
+   - Date Range
+   - Search Description
+3. View session-grouped activities
+4. Export to CSV if needed
+
+## 🔐 Security Features
+
+### Failed Login Tracking
+- **Existing User, Wrong Password:**
+  ```
+  User: admin
+  Activity: Login Failed
+  Description: Failed login: Invalid password. Username attempted: admin
+  ```
+
+- **Non-existent Username:**
+  ```
+  User: System
+  Activity: Login Failed
+  Description: Failed login: Invalid username and password. Username attempted: hacker123
+  ```
+
+### Session Tracking
+- Unique UUID generated per login session
+- All activities grouped by session_id
+- Complete user session timeline from login to logout
+- Session-based forensics capability
+
+### Activity Logging
+All user actions are logged with:
+- User ID and username
+- Activity type (color-coded)
+- Description
+- IP address
+- Session ID
+- Timestamp
+
+### Password Security
+- SHA256 hashing
+- Current password verification for changes
+- Password confirmation required
+- No plain-text storage
+
 ## 📁 Project Structure
 
 ```
@@ -350,6 +488,8 @@ receive_section/
 ├── app.py                          # Main Flask application
 ├── init_database.py                # Database initialization script
 ├── add_is_section_head_column.py  # Permission fix script
+├── add_system_user.py             # System user for failed logins
+├── add_session_tracking.py        # Add session tracking column
 ├── wbsedcl_tracking.db            # SQLite database (created on init)
 ├── requirements.txt               # Python dependencies
 ├── README.md                      # This file
@@ -358,6 +498,7 @@ receive_section/
 │   ├── base.html                 # Base template with navigation
 │   ├── login.html                # Login page
 │   ├── dashboard.html            # User dashboard
+│   ├── user_profile.html         # User profile page
 │   │
 │   ├── notesheets/               # Notesheet templates
 │   │   ├── list.html            # Notesheet list with filters
@@ -374,6 +515,8 @@ receive_section/
 │   │   └── edit_movement.html   # Edit movement (superuser)
 │   │
 │   ├── admin/                    # Admin templates
+│   │   ├── dashboard.html       # Admin monitoring dashboard
+│   │   ├── logs.html            # Activity logs with filtering
 │   │   ├── users.html           # User management
 │   │   └── edit_user.html       # Edit user form
 │   │
@@ -401,7 +544,7 @@ receive_section/
 
 2. **Change Default Passwords:**
    - Login as admin
-   - Go to User Management → Edit admin
+   - Go to Profile
    - Change password immediately
 
 3. **Production Deployment:**
@@ -440,11 +583,31 @@ python add_is_section_head_column.py
 python app.py
 ```
 
+#### Issue: Failed logins not showing in logs
+**Solution:**
+```powershell
+# Add system user for failed login tracking
+python add_system_user.py
+
+# Restart Flask
+python app.py
+```
+
 #### Issue: Empty dropdown when forwarding
 **Solution:**
 1. Check if user is current holder
 2. Verify SQL query returns users (check PowerShell console for DEBUG output)
 3. Check browser console (F12) for JavaScript errors
+
+#### Issue: Profile page shows 404
+**Solution:**
+```powershell
+# Ensure templates are deployed
+copy user_profile.html templates\user_profile.html
+
+# Restart Flask
+python app.py
+```
 
 ### Debug Mode
 
@@ -465,6 +628,16 @@ SELECT u.username, ur.role_name
 FROM users u 
 JOIN user_role_mapping urm ON u.user_id = urm.user_id
 JOIN user_roles ur ON urm.role_id = ur.role_id;
+
+# Check failed logins
+SELECT * FROM activity_logs WHERE activity_type = 'login_failed' ORDER BY created_at DESC LIMIT 10;
+
+# Check sessions
+SELECT DISTINCT session_id, COUNT(*) as activity_count 
+FROM activity_logs 
+WHERE session_id IS NOT NULL 
+GROUP BY session_id 
+ORDER BY created_at DESC;
 ```
 
 ## 📄 License
@@ -480,7 +653,19 @@ Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
 in the Software without restriction, including without limitation the rights
 to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software.
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR DEALINGS IN THE
+SOFTWARE.
 ```
 
 ## 🎯 Roadmap
@@ -492,21 +677,69 @@ copies of the Software.
 - [ ] Advanced search with date ranges
 - [ ] Document attachments (file upload)
 - [ ] Reports and analytics dashboard
+- [ ] Mobile app (iOS/Android)
 - [ ] Barcode/QR code for documents
+- [ ] SMS notifications
+- [ ] Integration with existing systems
+- [ ] Multi-language support
+- [ ] Dark mode UI
+- [ ] Two-factor authentication
+- [ ] LDAP/Active Directory integration
 
 ### Version History
 
-**v1.0.0** (2026-01-12)
-- Initial release
-- Basic notesheet and bill tracking
-- Role-based access control
-- Section-wise workflow
-- Movement history with time tracking
-- User management
-- Personalized dashboard
+**v1.2.0** (2026-01-12)
+- ✅ Session tracking for activity monitoring
+- ✅ Failed login attempt logging (all usernames)
+- ✅ User profile page with permission-based editing
+- ✅ Admin dashboard with system monitoring
+- ✅ Activity logs with advanced filtering
+- ✅ Export logs to CSV
+- ✅ System user for unknown login attempts
+
+**v1.1.0** (2026-01-11)
+- ✅ Section head forwarding fix
+- ✅ User edit functionality for admins
+- ✅ Movement history with section head names
+- ✅ Personalized dashboard
+
+**v1.0.0** (2026-01-10)
+- ✅ Initial release
+- ✅ Basic notesheet and bill tracking
+- ✅ Role-based access control
+- ✅ Section-wise workflow
+- ✅ Movement history with time tracking
+- ✅ User management
 
 ---
 
 **Built with ❤️ for WBSEDCL**
 
 *Last Updated: January 12, 2026*
+
+## 📞 Support
+
+For issues, questions, or suggestions:
+
+1. Check this README first
+2. Review [Troubleshooting](#troubleshooting) section
+3. Check application logs (PowerShell console)
+4. Create an issue with:
+   - Description of problem
+   - Steps to reproduce
+   - Error messages
+   - Screenshots (if applicable)
+
+## 🙏 Acknowledgments
+
+- Flask framework for Python web development
+- Bootstrap 5 for responsive UI
+- Bootstrap Icons for beautiful iconography
+- SQLite for reliable data storage
+- Flask-Login for authentication management
+
+---
+
+**System Status:** Production Ready ✅  
+**Current Version:** 1.2.0  
+**Last Updated:** January 12, 2026

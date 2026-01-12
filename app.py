@@ -169,6 +169,11 @@ def login():
         user_data = db.authenticate_user(username, password)
         
         if user_data:
+            # Generate unique session ID
+            import uuid
+            session_id = str(uuid.uuid4())
+            session['session_id'] = session_id
+            
             # Update last login
             conn = db.connect()
             cursor = conn.cursor()
@@ -176,8 +181,8 @@ def login():
                          (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), user_data['user_id']))
             conn.commit()
             
-            # Log activity
-            db.log_activity(user_data['user_id'], 'login', 'User logged in', request.remote_addr)
+            # Log activity with session ID
+            db.log_activity(user_data['user_id'], 'login', 'User logged in', request.remote_addr, session_id)
             db.close()
             
             # Create user object and login
@@ -206,16 +211,18 @@ def login():
                 db.log_activity(
                     user_exists[0], 
                     'login_failed', 
-                    f'Failed login attempt - Invalid password for username: {username}', 
-                    request.remote_addr
+                    f'Failed login: Invalid password. Username attempted: {username}', 
+                    request.remote_addr,
+                    None  # No session for failed login
                 )
             else:
-                # Username doesn't exist
+                # Username doesn't exist - use system user_id = 0
                 db.log_activity(
-                    None,
+                    0,
                     'login_failed',
-                    f'Failed login attempt - Username not found: {username}',
-                    request.remote_addr
+                    f'Failed login: Invalid username and password. Username attempted: {username}',
+                    request.remote_addr,
+                    None  # No session for failed login
                 )
             
             db.close()
@@ -228,12 +235,145 @@ def login():
 def logout():
     """User logout"""
     db = WBSEDCLDatabase()
-    db.log_activity(current_user.id, 'logout', 'User logged out', request.remote_addr)
+    session_id = session.get('session_id', None)
+    db.log_activity(current_user.id, 'logout', 'User logged out', request.remote_addr, session_id)
     db.close()
     
+    # Clear session
+    session.pop('session_id', None)
     logout_user()
     flash('You have been logged out.', 'success')
     return redirect(url_for('login'))
+
+@app.route('/profile', methods=['GET', 'POST'])
+@login_required
+def user_profile():
+    """User profile page"""
+    db = WBSEDCLDatabase()
+    conn = db.connect()
+    cursor = conn.cursor()
+    
+    if request.method == 'POST':
+        # Get form data
+        full_name = request.form.get('full_name')
+        email = request.form.get('email')
+        phone = request.form.get('phone')
+        designation = request.form.get('designation')
+        current_password = request.form.get('current_password')
+        new_password = request.form.get('new_password')
+        confirm_password = request.form.get('confirm_password')
+        
+        # Superuser can change username and section
+        username = request.form.get('username') if current_user.is_superuser else None
+        section_id = request.form.get('section_id') if current_user.is_superuser else None
+        
+        # Validate
+        if not full_name:
+            flash('Full name is required.', 'error')
+            db.close()
+            return redirect(url_for('user_profile'))
+        
+        # Password change validation
+        if new_password:
+            if not current_password:
+                flash('Current password is required to set a new password.', 'error')
+                db.close()
+                return redirect(url_for('user_profile'))
+            
+            if new_password != confirm_password:
+                flash('New passwords do not match.', 'error')
+                db.close()
+                return redirect(url_for('user_profile'))
+            
+            # Verify current password
+            import hashlib
+            current_hash = hashlib.sha256(current_password.encode()).hexdigest()
+            cursor.execute('SELECT password_hash FROM users WHERE user_id = ?', (current_user.id,))
+            stored_hash = cursor.fetchone()[0]
+            
+            if current_hash != stored_hash:
+                flash('Current password is incorrect.', 'error')
+                db.close()
+                return redirect(url_for('user_profile'))
+            
+            # Update with new password
+            new_hash = hashlib.sha256(new_password.encode()).hexdigest()
+            
+            if current_user.is_superuser and username and section_id:
+                cursor.execute('''
+                    UPDATE users SET 
+                        username = ?, full_name = ?, email = ?, phone = ?, 
+                        designation = ?, section_id = ?, password_hash = ?
+                    WHERE user_id = ?
+                ''', (username, full_name, email, phone, designation, section_id, new_hash, current_user.id))
+            else:
+                cursor.execute('''
+                    UPDATE users SET 
+                        full_name = ?, email = ?, phone = ?, designation = ?, password_hash = ?
+                    WHERE user_id = ?
+                ''', (full_name, email, phone, designation, new_hash, current_user.id))
+            
+            flash('Profile and password updated successfully!', 'success')
+        else:
+            # Update without password change
+            if current_user.is_superuser and username and section_id:
+                cursor.execute('''
+                    UPDATE users SET 
+                        username = ?, full_name = ?, email = ?, phone = ?, 
+                        designation = ?, section_id = ?
+                    WHERE user_id = ?
+                ''', (username, full_name, email, phone, designation, section_id, current_user.id))
+            else:
+                cursor.execute('''
+                    UPDATE users SET 
+                        full_name = ?, email = ?, phone = ?, designation = ?
+                    WHERE user_id = ?
+                ''', (full_name, email, phone, designation, current_user.id))
+            
+            flash('Profile updated successfully!', 'success')
+        
+        conn.commit()
+        
+        # Log activity
+        session_id = session.get('session_id', None)
+        db.log_activity(
+            current_user.id,
+            'profile_updated',
+            'User updated their profile',
+            request.remote_addr,
+            session_id
+        )
+        
+        db.close()
+        return redirect(url_for('user_profile'))
+    
+    # GET - Load user data
+    cursor.execute('''
+        SELECT 
+            u.user_id, u.username, u.full_name, u.email, u.phone,
+            u.section_id, s.section_name, u.designation, 
+            u.is_active, u.is_superuser, u.last_login,
+            GROUP_CONCAT(ur.role_name) as roles
+        FROM users u
+        LEFT JOIN sections s ON u.section_id = s.section_id
+        LEFT JOIN user_role_mapping urm ON u.user_id = urm.user_id
+        LEFT JOIN user_roles ur ON urm.role_id = ur.role_id
+        WHERE u.user_id = ?
+        GROUP BY u.user_id
+    ''', (current_user.id,))
+    
+    user_data = cursor.fetchone()
+    columns = [desc[0] for desc in cursor.description]
+    user = dict(zip(columns, user_data))
+    
+    # Get all sections (for superuser)
+    sections = []
+    if current_user.is_superuser:
+        sections = db.get_all_sections()
+    
+    db.close()
+    
+    return render_template('user_profile.html', user=user, sections=sections)
 
 @app.route('/dashboard')
 @login_required
@@ -1730,6 +1870,7 @@ def admin_logs():
             al.activity_type,
             al.description,
             al.ip_address,
+            al.session_id,
             al.created_at
         FROM activity_logs al
         LEFT JOIN users u ON al.user_id = u.user_id

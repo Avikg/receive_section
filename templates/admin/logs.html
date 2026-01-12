@@ -110,12 +110,13 @@
                             <th>User</th>
                             <th>Activity Type</th>
                             <th>Description</th>
+                            <th>Session ID</th>
                             <th>IP Address</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for log in logs %}
-                        <tr>
+                        <tr {% if log.session_id %}class="session-{{ log.session_id[:8] }}"{% endif %}>
                             <td><small>{{ log.log_id }}</small></td>
                             <td><small>{{ log.created_at }}</small></td>
                             <td>
@@ -140,6 +141,15 @@
                                 </span>
                             </td>
                             <td><small>{{ log.description }}</small></td>
+                            <td>
+                                {% if log.session_id %}
+                                <small class="font-monospace text-primary" title="{{ log.session_id }}">
+                                    {{ log.session_id[:8] }}...
+                                </small>
+                                {% else %}
+                                <small class="text-muted">-</small>
+                                {% endif %}
+                            </td>
                             <td>
                                 <small class="text-muted font-monospace">{{ log.ip_address }}</small>
                             </td>
