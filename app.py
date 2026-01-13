@@ -563,7 +563,7 @@ NO movement_id, NO is_current - just uses main tables
 @app.route('/search/advanced', methods=['GET'])
 @login_required
 def advanced_search():
-    """Advanced search with multiple filters"""
+    """Advanced search with multiple filters - INCLUDING LETTERS"""
     db = WBSEDCLDatabase()
     conn = db.connect()
     cursor = conn.cursor()
@@ -722,6 +722,74 @@ def advanced_search():
             columns = [desc[0] for desc in cursor.description]
             results.extend([dict(zip(columns, row)) for row in bill_results])
         
+        # Search Letters (NEW!)
+        if doc_type in ['all', 'letter']:
+            letter_query = '''
+                SELECT 
+                    'letter' as doc_type,
+                    l.letter_id as doc_id,
+                    l.letter_number as doc_number,
+                    l.subject,
+                    l.sender_name,
+                    l.priority,
+                    l.is_parked,
+                    l.current_status as status,
+                    u.full_name as holder_name,
+                    s.section_name,
+                    l.received_date as in_date,
+                    CAST(julianday('now') - julianday(l.received_date) AS INTEGER) as days_held
+                FROM letters l
+                LEFT JOIN users u ON l.current_holder = u.user_id
+                LEFT JOIN sections s ON l.current_section_id = s.section_id
+                WHERE 1=1
+            '''
+            params = []
+            
+            if status == 'parked':
+                letter_query += ' AND l.is_parked = 1'
+            elif status == 'active':
+                letter_query += ' AND l.is_parked = 0'
+            elif status == 'closed':
+                letter_query += ' AND l.current_status = "Closed"'
+            
+            if priority != 'all':
+                letter_query += ' AND l.priority = ?'
+                params.append(priority)
+            
+            if section_id != 'all':
+                letter_query += ' AND l.current_section_id = ?'
+                params.append(section_id)
+            
+            if holder_id != 'all':
+                letter_query += ' AND l.current_holder = ?'
+                params.append(holder_id)
+            
+            if date_from:
+                letter_query += ' AND DATE(l.received_date) >= ?'
+                params.append(date_from)
+            
+            if date_to:
+                letter_query += ' AND DATE(l.received_date) <= ?'
+                params.append(date_to)
+            
+            if keywords:
+                letter_query += ' AND (l.subject LIKE ? OR l.letter_number LIKE ? OR l.sender_name LIKE ?)'
+                keyword_param = f'%{keywords}%'
+                params.extend([keyword_param, keyword_param, keyword_param])
+            
+            if doc_number:
+                letter_query += ' AND l.letter_number LIKE ?'
+                params.append(f'%{doc_number}%')
+            
+            if sender:
+                letter_query += ' AND l.sender_name LIKE ?'
+                params.append(f'%{sender}%')
+            
+            cursor.execute(letter_query, params)
+            letter_results = cursor.fetchall()
+            columns = [desc[0] for desc in cursor.description]
+            results.extend([dict(zip(columns, row)) for row in letter_results])
+        
         # Filter by minimum days held
         if min_days:
             results = [r for r in results if r.get('days_held', 0) >= int(min_days)]
@@ -758,6 +826,7 @@ def advanced_search():
                              'sender': sender
                          })
 
+
 """
 ULTRA-SIMPLIFIED Advanced Reports Route
 Works without current_movement_id - uses current_holder only
@@ -766,7 +835,7 @@ Works without current_movement_id - uses current_holder only
 @app.route('/reports/advanced', methods=['GET'])
 @login_required
 def advanced_reports():
-    """Generate advanced reports"""
+    """Generate advanced reports - UPDATED WITH LETTERS"""
     db = WBSEDCLDatabase()
     conn = db.connect()
     cursor = conn.cursor()
@@ -779,31 +848,34 @@ def advanced_reports():
     aging_summary = None
     
     if report_type:
-        # Section Performance Report
+        # Section Performance Report - UPDATED WITH LETTERS
         if report_type == 'section_performance':
             query = '''
                 SELECT 
                     s.section_name,
-                    COUNT(DISTINCT n.notesheet_id) + COUNT(DISTINCT b.bill_id) as total_docs,
-                    AVG(julianday('now') - julianday(COALESCE(n.received_date, b.received_date))) as avg_days,
+                    COUNT(DISTINCT n.notesheet_id) + COUNT(DISTINCT b.bill_id) + COUNT(DISTINCT l.letter_id) as total_docs,
+                    AVG(julianday('now') - julianday(COALESCE(n.received_date, b.received_date, l.received_date))) as avg_days,
                     SUM(CASE WHEN n.current_holder IS NOT NULL AND n.is_parked = 0 THEN 1 ELSE 0 END) +
-                    SUM(CASE WHEN b.current_holder IS NOT NULL AND b.is_parked = 0 THEN 1 ELSE 0 END) as pending,
+                    SUM(CASE WHEN b.current_holder IS NOT NULL AND b.is_parked = 0 THEN 1 ELSE 0 END) +
+                    SUM(CASE WHEN l.current_holder IS NOT NULL AND l.is_parked = 0 THEN 1 ELSE 0 END) as pending,
                     SUM(CASE WHEN n.current_status = 'Closed' THEN 1 ELSE 0 END) +
-                    SUM(CASE WHEN b.payment_status = 'Paid' THEN 1 ELSE 0 END) as cleared
+                    SUM(CASE WHEN b.payment_status = 'Paid' THEN 1 ELSE 0 END) +
+                    SUM(CASE WHEN l.current_status = 'Closed' THEN 1 ELSE 0 END) as cleared
                 FROM sections s
                 LEFT JOIN notesheets n ON s.section_id = n.current_section_id
                 LEFT JOIN bills b ON s.section_id = b.current_section_id
+                LEFT JOIN letters l ON s.section_id = l.current_section_id
                 WHERE 1=1
             '''
             params = []
             
             if date_from:
-                query += ' AND (n.received_date >= ? OR b.received_date >= ?)'
-                params.extend([date_from, date_from])
+                query += ' AND (n.received_date >= ? OR b.received_date >= ? OR l.received_date >= ?)'
+                params.extend([date_from, date_from, date_from])
             
             if date_to:
-                query += ' AND (n.received_date <= ? OR b.received_date <= ?)'
-                params.extend([date_to, date_to])
+                query += ' AND (n.received_date <= ? OR b.received_date <= ? OR l.received_date <= ?)'
+                params.extend([date_to, date_to, date_to])
             
             query += ' GROUP BY s.section_id HAVING total_docs > 0 ORDER BY avg_days DESC'
             
@@ -812,32 +884,34 @@ def advanced_reports():
             columns = [desc[0] for desc in cursor.description]
             report_data = [dict(zip(columns, row)) for row in results]
         
-        # User Productivity Report
+        # User Productivity Report - UPDATED WITH LETTERS
         elif report_type == 'user_productivity':
             query = '''
                 SELECT 
                     u.full_name,
                     s.section_name,
-                    COUNT(DISTINCT nm.movement_id) + COUNT(DISTINCT bm.movement_id) as processed,
-                    AVG(julianday('now') - julianday(COALESCE(nm.forwarded_date, bm.forwarded_date))) as avg_days,
-                    COUNT(DISTINCT n.notesheet_id) + COUNT(DISTINCT b.bill_id) as holding
+                    COUNT(DISTINCT nm.movement_id) + COUNT(DISTINCT bm.movement_id) + COUNT(DISTINCT lm.movement_id) as processed,
+                    AVG(julianday('now') - julianday(COALESCE(nm.forwarded_date, bm.forwarded_date, lm.forwarded_date))) as avg_days,
+                    COUNT(DISTINCT n.notesheet_id) + COUNT(DISTINCT b.bill_id) + COUNT(DISTINCT l.letter_id) as holding
                 FROM users u
                 LEFT JOIN sections s ON u.section_id = s.section_id
                 LEFT JOIN notesheet_movements nm ON u.user_id = nm.from_user
                 LEFT JOIN bill_movements bm ON u.user_id = bm.from_user
+                LEFT JOIN letter_movements lm ON u.user_id = lm.from_user
                 LEFT JOIN notesheets n ON u.user_id = n.current_holder
                 LEFT JOIN bills b ON u.user_id = b.current_holder
+                LEFT JOIN letters l ON u.user_id = l.current_holder
                 WHERE u.is_active = 1 AND u.is_superuser = 0
             '''
             params = []
             
             if date_from:
-                query += ' AND (nm.forwarded_date >= ? OR bm.forwarded_date >= ?)'
-                params.extend([date_from, date_from])
+                query += ' AND (nm.forwarded_date >= ? OR bm.forwarded_date >= ? OR lm.forwarded_date >= ?)'
+                params.extend([date_from, date_from, date_from])
             
             if date_to:
-                query += ' AND (nm.forwarded_date <= ? OR bm.forwarded_date <= ?)'
-                params.extend([date_to, date_to])
+                query += ' AND (nm.forwarded_date <= ? OR bm.forwarded_date <= ? OR lm.forwarded_date <= ?)'
+                params.extend([date_to, date_to, date_to])
             
             query += ' GROUP BY u.user_id HAVING processed > 0 ORDER BY processed DESC LIMIT 20'
             
@@ -846,7 +920,7 @@ def advanced_reports():
             columns = [desc[0] for desc in cursor.description]
             report_data = [dict(zip(columns, row)) for row in results]
         
-        # Document Aging Report (SIMPLIFIED)
+        # Document Aging Report - UPDATED WITH LETTERS
         elif report_type == 'document_aging':
             # Get aging summary - using received_date as proxy
             cursor.execute('''
@@ -864,6 +938,11 @@ def advanced_reports():
                     SELECT 
                         CAST(julianday('now') - julianday(received_date) AS INTEGER) as days_held
                     FROM bills
+                    WHERE is_parked = 0 AND current_holder IS NOT NULL
+                    UNION ALL
+                    SELECT 
+                        CAST(julianday('now') - julianday(received_date) AS INTEGER) as days_held
+                    FROM letters
                     WHERE is_parked = 0 AND current_holder IS NOT NULL
                 )
             ''')
@@ -895,6 +974,18 @@ def advanced_reports():
                 FROM bills b
                 LEFT JOIN users u ON b.current_holder = u.user_id
                 WHERE b.is_parked = 0 AND b.current_holder IS NOT NULL
+                UNION ALL
+                SELECT 
+                    'letter' as doc_type,
+                    l.letter_id as doc_id,
+                    l.letter_number as doc_number,
+                    l.subject,
+                    u.full_name as holder_name,
+                    l.priority,
+                    CAST(julianday('now') - julianday(l.received_date) AS INTEGER) as days_held
+                FROM letters l
+                LEFT JOIN users u ON l.current_holder = u.user_id
+                WHERE l.is_parked = 0 AND l.current_holder IS NOT NULL
                 ORDER BY days_held DESC
                 LIMIT 50
             '''
@@ -904,19 +995,20 @@ def advanced_reports():
             columns = [desc[0] for desc in cursor.description]
             report_data = [dict(zip(columns, row)) for row in results]
         
-        # Bottleneck Analysis Report
+        # Bottleneck Analysis Report - UPDATED WITH LETTERS
         elif report_type == 'bottleneck_analysis':
             query = '''
                 SELECT 
                     s.section_name,
                     u.full_name as user_name,
-                    COUNT(DISTINCT n.notesheet_id) + COUNT(DISTINCT b.bill_id) as pending_count,
-                    AVG(julianday('now') - julianday(COALESCE(n.received_date, b.received_date))) as avg_wait_days,
-                    MAX(julianday('now') - julianday(COALESCE(n.received_date, b.received_date))) as max_wait_days
+                    COUNT(DISTINCT n.notesheet_id) + COUNT(DISTINCT b.bill_id) + COUNT(DISTINCT l.letter_id) as pending_count,
+                    AVG(julianday('now') - julianday(COALESCE(n.received_date, b.received_date, l.received_date))) as avg_wait_days,
+                    MAX(julianday('now') - julianday(COALESCE(n.received_date, b.received_date, l.received_date))) as max_wait_days
                 FROM users u
                 JOIN sections s ON u.section_id = s.section_id
                 LEFT JOIN notesheets n ON u.user_id = n.current_holder AND n.is_parked = 0
                 LEFT JOIN bills b ON u.user_id = b.current_holder AND b.is_parked = 0
+                LEFT JOIN letters l ON u.user_id = l.current_holder AND l.is_parked = 0
                 WHERE u.is_active = 1
                 GROUP BY u.user_id
                 HAVING pending_count > 2
@@ -929,26 +1021,32 @@ def advanced_reports():
             columns = [desc[0] for desc in cursor.description]
             report_data = [dict(zip(columns, row)) for row in results]
         
-        # Monthly Summary Report
+        # Monthly Summary Report - UPDATED WITH LETTERS
         elif report_type == 'monthly_summary':
             query = '''
                 SELECT 
                     month,
                     SUM(notesheets_received) as notesheets_received,
                     SUM(bills_received) as bills_received,
+                    SUM(letters_received) as letters_received,
                     SUM(notesheets_cleared) as notesheets_cleared,
                     SUM(bills_paid) as bills_paid,
+                    SUM(letters_closed) as letters_closed,
                     AVG(CASE WHEN avg_notesheet_days > 0 THEN avg_notesheet_days END) as avg_notesheet_days,
-                    AVG(CASE WHEN avg_bill_days > 0 THEN avg_bill_days END) as avg_bill_days
+                    AVG(CASE WHEN avg_bill_days > 0 THEN avg_bill_days END) as avg_bill_days,
+                    AVG(CASE WHEN avg_letter_days > 0 THEN avg_letter_days END) as avg_letter_days
                 FROM (
                     SELECT 
                         strftime('%Y-%m', received_date) as month,
                         COUNT(*) as notesheets_received,
                         0 as bills_received,
+                        0 as letters_received,
                         SUM(CASE WHEN current_status = 'Closed' THEN 1 ELSE 0 END) as notesheets_cleared,
                         0 as bills_paid,
+                        0 as letters_closed,
                         AVG(julianday('now') - julianday(received_date)) as avg_notesheet_days,
-                        0 as avg_bill_days
+                        0 as avg_bill_days,
+                        0 as avg_letter_days
                     FROM notesheets
                     WHERE strftime('%Y-%m', received_date) >= strftime('%Y-%m', 'now', '-12 months')
                     GROUP BY month
@@ -957,11 +1055,29 @@ def advanced_reports():
                         strftime('%Y-%m', received_date) as month,
                         0 as notesheets_received,
                         COUNT(*) as bills_received,
+                        0 as letters_received,
                         0 as notesheets_cleared,
                         SUM(CASE WHEN payment_status = 'Paid' THEN 1 ELSE 0 END) as bills_paid,
+                        0 as letters_closed,
                         0 as avg_notesheet_days,
-                        AVG(julianday('now') - julianday(received_date)) as avg_bill_days
+                        AVG(julianday('now') - julianday(received_date)) as avg_bill_days,
+                        0 as avg_letter_days
                     FROM bills
+                    WHERE strftime('%Y-%m', received_date) >= strftime('%Y-%m', 'now', '-12 months')
+                    GROUP BY month
+                    UNION ALL
+                    SELECT 
+                        strftime('%Y-%m', received_date) as month,
+                        0 as notesheets_received,
+                        0 as bills_received,
+                        COUNT(*) as letters_received,
+                        0 as notesheets_cleared,
+                        0 as bills_paid,
+                        SUM(CASE WHEN current_status = 'Closed' THEN 1 ELSE 0 END) as letters_closed,
+                        0 as avg_notesheet_days,
+                        0 as avg_bill_days,
+                        AVG(julianday('now') - julianday(received_date)) as avg_letter_days
+                    FROM letters
                     WHERE strftime('%Y-%m', received_date) >= strftime('%Y-%m', 'now', '-12 months')
                     GROUP BY month
                 )
@@ -975,7 +1091,7 @@ def advanced_reports():
             columns = [desc[0] for desc in cursor.description]
             report_data = [dict(zip(columns, row)) for row in results]
         
-        # Priority Analysis Report
+        # Priority Analysis Report - UPDATED WITH LETTERS
         elif report_type == 'priority_analysis':
             query = '''
                 SELECT 
@@ -997,6 +1113,16 @@ def advanced_reports():
                     AVG(julianday('now') - julianday(received_date)) as avg_age_days
                 FROM bills
                 GROUP BY priority
+                UNION ALL
+                SELECT 
+                    priority,
+                    'Letter' as doc_type,
+                    COUNT(*) as total_count,
+                    SUM(CASE WHEN is_parked = 0 AND current_status NOT IN ('Closed', 'Replied') THEN 1 ELSE 0 END) as active_count,
+                    SUM(CASE WHEN is_parked = 1 THEN 1 ELSE 0 END) as parked_count,
+                    AVG(julianday('now') - julianday(received_date)) as avg_age_days
+                FROM letters
+                GROUP BY priority
                 ORDER BY priority, doc_type
             '''
             
@@ -1005,7 +1131,7 @@ def advanced_reports():
             columns = [desc[0] for desc in cursor.description]
             report_data = [dict(zip(columns, row)) for row in results]
         
-        # SLA Compliance Report
+        # SLA Compliance Report - UPDATED WITH LETTERS
         elif report_type == 'sla_compliance':
             # Define SLA limits (in days)
             SLA_LIMITS = {
@@ -1074,6 +1200,36 @@ def advanced_reports():
                         'total_docs': bill_result[0],
                         'within_sla': bill_result[1],
                         'breached_sla': bill_result[2],
+                        'compliance_percent': round(compliance, 1)
+                    })
+                
+                # Letters - NEW!
+                cursor.execute('''
+                    SELECT 
+                        COUNT(*) as total,
+                        SUM(CASE 
+                            WHEN CAST(julianday('now') - julianday(received_date) AS INTEGER) <= ? 
+                            THEN 1 ELSE 0 
+                        END) as within_sla,
+                        SUM(CASE 
+                            WHEN CAST(julianday('now') - julianday(received_date) AS INTEGER) > ? 
+                            THEN 1 ELSE 0 
+                        END) as breached_sla
+                    FROM letters
+                    WHERE priority = ? AND is_parked = 0 AND current_holder IS NOT NULL
+                ''', (sla_days, sla_days, priority))
+                
+                letter_result = cursor.fetchone()
+                
+                if letter_result and letter_result[0] > 0:
+                    compliance = (letter_result[1] / letter_result[0]) * 100 if letter_result[0] > 0 else 0
+                    report_data.append({
+                        'priority': priority,
+                        'doc_type': 'Letter',
+                        'sla_days': sla_days,
+                        'total_docs': letter_result[0],
+                        'within_sla': letter_result[1],
+                        'breached_sla': letter_result[2],
                         'compliance_percent': round(compliance, 1)
                     })
     
@@ -1456,13 +1612,56 @@ def receive_notesheet():
 
 @app.route('/notesheets/<int:notesheet_id>/forward', methods=['POST'])
 @login_required
-@forward_permission_required
 def forward_notesheet_route(notesheet_id):
     """Forward a notesheet to another user"""
+    
+    # Permission check first
+    db = WBSEDCLDatabase()
+    conn = db.connect()
+    cursor = conn.cursor()
+    
+    # Get notesheet info
+    cursor.execute('''
+        SELECT current_holder, current_status 
+        FROM notesheets 
+        WHERE notesheet_id = ?
+    ''', (notesheet_id,))
+    
+    notesheet = cursor.fetchone()
+    
+    if not notesheet:
+        flash('Notesheet not found.', 'error')
+        db.close()
+        return redirect(url_for('notesheets_list'))
+    
+    current_holder, current_status = notesheet
+    
+    # PERMISSION CHECK
+    can_forward = (
+        current_holder == current_user.id or
+        current_user.is_receive_section() or
+        current_user.is_section_head() or
+        current_user.is_superuser
+    )
+    
+    if not can_forward:
+        flash('You do not have permission to forward this document.', 'error')
+        db.close()
+        return redirect(url_for('notesheet_detail', notesheet_id=notesheet_id))
+    
+    # Cannot forward if closed/archived
+    if current_status in ['Closed', 'Archived']:
+        flash('Cannot forward closed or archived documents.', 'error')
+        db.close()
+        return redirect(url_for('notesheet_detail', notesheet_id=notesheet_id))
+    
+    db.close()
+    
+    # Get form data
     to_user = request.form.get('to_user')
     action = request.form.get('action', 'Forwarded')
     comments = request.form.get('comments')
-    forward_date = request.form.get('forward_date')  # Get the custom forward date
+    forward_date = request.form.get('forward_date')
     
     if not to_user:
         flash('Please select a user to forward to.', 'error')
@@ -1472,6 +1671,18 @@ def forward_notesheet_route(notesheet_id):
         flash('Please provide forward date.', 'error')
         return redirect(url_for('notesheet_detail', notesheet_id=notesheet_id))
     
+    # Validate forward date
+    from datetime import datetime
+    try:
+        forward_date_obj = datetime.strptime(forward_date, '%Y-%m-%d')
+        if forward_date_obj > datetime.now():
+            flash('Forward date cannot be in the future.', 'error')
+            return redirect(url_for('notesheet_detail', notesheet_id=notesheet_id))
+    except ValueError:
+        flash('Invalid date format.', 'error')
+        return redirect(url_for('notesheet_detail', notesheet_id=notesheet_id))
+    
+    # Use existing database method
     db = WBSEDCLDatabase()
     
     movement_data = {
@@ -1481,7 +1692,7 @@ def forward_notesheet_route(notesheet_id):
         'forwarded_by': current_user.id,
         'action_taken': action,
         'comments': comments,
-        'forward_date': forward_date  # Pass custom date
+        'forward_date': forward_date
     }
     
     success = db.forward_notesheet(movement_data)
@@ -1909,13 +2120,56 @@ def receive_bill():
 
 @app.route('/bills/<int:bill_id>/forward', methods=['POST'])
 @login_required
-@forward_permission_required
 def forward_bill_route(bill_id):
     """Forward a bill to another user"""
+    
+    # Permission check first
+    db = WBSEDCLDatabase()
+    conn = db.connect()
+    cursor = conn.cursor()
+    
+    # Get bill info
+    cursor.execute('''
+        SELECT current_holder, current_status, payment_status
+        FROM bills 
+        WHERE bill_id = ?
+    ''', (bill_id,))
+    
+    bill = cursor.fetchone()
+    
+    if not bill:
+        flash('Bill not found.', 'error')
+        db.close()
+        return redirect(url_for('bills_list'))
+    
+    current_holder, current_status, payment_status = bill
+    
+    # PERMISSION CHECK
+    can_forward = (
+        current_holder == current_user.id or
+        current_user.is_receive_section() or
+        current_user.is_section_head() or
+        current_user.is_superuser
+    )
+    
+    if not can_forward:
+        flash('You do not have permission to forward this document.', 'error')
+        db.close()
+        return redirect(url_for('bill_detail', bill_id=bill_id))
+    
+    # Cannot forward if closed/archived/paid
+    if current_status in ['Closed', 'Archived'] or payment_status == 'Paid':
+        flash('Cannot forward closed, archived, or paid bills.', 'error')
+        db.close()
+        return redirect(url_for('bill_detail', bill_id=bill_id))
+    
+    db.close()
+    
+    # Get form data
     to_user = request.form.get('to_user')
     action = request.form.get('action', 'Forwarded')
     comments = request.form.get('comments')
-    forward_date = request.form.get('forward_date')  # Get the custom forward date
+    forward_date = request.form.get('forward_date')
     
     if not to_user:
         flash('Please select a user to forward to.', 'error')
@@ -1925,6 +2179,18 @@ def forward_bill_route(bill_id):
         flash('Please provide forward date.', 'error')
         return redirect(url_for('bill_detail', bill_id=bill_id))
     
+    # Validate forward date
+    from datetime import datetime
+    try:
+        forward_date_obj = datetime.strptime(forward_date, '%Y-%m-%d')
+        if forward_date_obj > datetime.now():
+            flash('Forward date cannot be in the future.', 'error')
+            return redirect(url_for('bill_detail', bill_id=bill_id))
+    except ValueError:
+        flash('Invalid date format.', 'error')
+        return redirect(url_for('bill_detail', bill_id=bill_id))
+    
+    # Use existing database method
     db = WBSEDCLDatabase()
     
     movement_data = {
@@ -1934,7 +2200,7 @@ def forward_bill_route(bill_id):
         'forwarded_by': current_user.id,
         'action_taken': action,
         'comments': comments,
-        'forward_date': forward_date  # Pass custom date
+        'forward_date': forward_date
     }
     
     success = db.forward_bill(movement_data)
@@ -2048,15 +2314,14 @@ def letter_detail(letter_id):
     conn = db.connect()
     cursor = conn.cursor()
     
-    # Get letter details with section info
+    # Get letter details with section info (WITHOUT days_held calculation)
     cursor.execute('''
         SELECT 
             l.*,
             u1.full_name as current_holder_name,
             u2.full_name as received_by_name,
             s.section_name as current_section_name,
-            ss.sub_section_name as current_sub_section_name,
-            CAST(julianday('now') - julianday(l.received_date) AS INTEGER) as days_held
+            ss.sub_section_name as current_sub_section_name
         FROM letters l
         LEFT JOIN users u1 ON l.current_holder = u1.user_id
         LEFT JOIN users u2 ON l.received_by = u2.user_id
@@ -2074,7 +2339,33 @@ def letter_detail(letter_id):
     
     # Convert to dict
     columns = [desc[0] for desc in cursor.description]
-    letter = dict(zip(columns, letter))
+    letter_dict = dict(zip(columns, letter))
+    
+    # CORRECTED: Calculate days held from CURRENT MOVEMENT, not received date
+    cursor.execute('''
+        SELECT forwarded_date
+        FROM letter_movements
+        WHERE letter_id = ? AND is_current = 1
+        ORDER BY movement_id DESC
+        LIMIT 1
+    ''', (letter_id,))
+    
+    current_movement = cursor.fetchone()
+    
+    if current_movement and current_movement[0]:
+        # Use the IN date from current movement
+        from datetime import datetime
+        in_date = datetime.strptime(current_movement[0], '%Y-%m-%d')
+        now = datetime.now()
+        days_held = (now - in_date).days
+        letter_dict['days_held'] = days_held
+    else:
+        # Fallback to received date if no movement
+        from datetime import datetime
+        received_date = datetime.strptime(letter_dict['received_date'], '%Y-%m-%d')
+        now = datetime.now()
+        days_held = (now - received_date).days
+        letter_dict['days_held'] = days_held
     
     # Get movement history (newest first - DESC)
     cursor.execute('''
@@ -2100,13 +2391,13 @@ def letter_detail(letter_id):
     columns = [desc[0] for desc in cursor.description]
     movements = [dict(zip(columns, row)) for row in movements]
     
-    # Calculate days held
+    # Calculate days held for each movement
     from datetime import datetime as dt
     for i, movement in enumerate(movements):
         movement['display_date'] = movement['forward_date_only']
         
         if i == 0:
-            # Current location
+            # Current location - still here
             try:
                 in_date = dt.strptime(movement['forward_date_only'], '%Y-%m-%d').date()
                 today = dt.now().date()
@@ -2172,7 +2463,7 @@ def letter_detail(letter_id):
     can_forward = False
     users = []
     
-    current_holder_id = letter['current_holder']
+    current_holder_id = letter_dict['current_holder']
     
     if current_user.is_receive_section():
         # Receive section can always forward
@@ -2187,7 +2478,7 @@ def letter_detail(letter_id):
             ORDER BY s.section_name, u.full_name
         ''', (current_holder_id,))
         
-    elif current_user.is_section_head() and letter['current_holder'] == current_user.id:
+    elif current_user.is_section_head() and letter_dict['current_holder'] == current_user.id:
         # Section heads can forward if they are the current holder
         can_forward = True
         cursor.execute('''
@@ -2207,7 +2498,7 @@ def letter_detail(letter_id):
             ORDER BY s.section_name, u.full_name
         ''', (current_user.id, current_user.section_id))
         
-    elif letter['current_holder'] == current_user.id:
+    elif letter_dict['current_holder'] == current_user.id:
         # Sectional users can forward to their section head
         can_forward = True
         cursor.execute('''
@@ -2231,11 +2522,13 @@ def letter_detail(letter_id):
     db.close()
     
     return render_template('letters/detail.html', 
-                         letter=letter, 
+                         letter=letter_dict, 
                          movements=movements, 
                          users=users,
                          sections=sections,
                          can_forward=can_forward)
+
+
 
 @app.route('/letters/receive', methods=['GET', 'POST'])
 @login_required
@@ -2336,9 +2629,52 @@ def receive_letter():
 
 @app.route('/letters/<int:letter_id>/forward', methods=['POST'])
 @login_required
-@forward_permission_required
 def forward_letter_route(letter_id):
     """Forward a letter to another user"""
+    
+    # Permission check first
+    db = WBSEDCLDatabase()
+    conn = db.connect()
+    cursor = conn.cursor()
+    
+    # Get letter info
+    cursor.execute('''
+        SELECT current_holder, current_status
+        FROM letters 
+        WHERE letter_id = ?
+    ''', (letter_id,))
+    
+    letter = cursor.fetchone()
+    
+    if not letter:
+        flash('Letter not found.', 'error')
+        db.close()
+        return redirect(url_for('letters_list'))
+    
+    current_holder, current_status = letter
+    
+    # PERMISSION CHECK
+    can_forward = (
+        current_holder == current_user.id or
+        current_user.is_receive_section() or
+        current_user.is_section_head() or
+        current_user.is_superuser
+    )
+    
+    if not can_forward:
+        flash('You do not have permission to forward this document.', 'error')
+        db.close()
+        return redirect(url_for('letter_detail', letter_id=letter_id))
+    
+    # Cannot forward if closed/archived/replied
+    if current_status in ['Closed', 'Archived', 'Replied']:
+        flash('Cannot forward closed, archived, or replied letters.', 'error')
+        db.close()
+        return redirect(url_for('letter_detail', letter_id=letter_id))
+    
+    db.close()
+    
+    # Get form data
     to_user = request.form.get('to_user')
     action = request.form.get('action', 'Forwarded')
     comments = request.form.get('comments')
@@ -2352,29 +2688,34 @@ def forward_letter_route(letter_id):
         flash('Please provide forward date.', 'error')
         return redirect(url_for('letter_detail', letter_id=letter_id))
     
+    # Validate forward date
+    from datetime import datetime
+    try:
+        forward_date_obj = datetime.strptime(forward_date, '%Y-%m-%d')
+        if forward_date_obj > datetime.now():
+            flash('Forward date cannot be in the future.', 'error')
+            return redirect(url_for('letter_detail', letter_id=letter_id))
+    except ValueError:
+        flash('Invalid date format.', 'error')
+        return redirect(url_for('letter_detail', letter_id=letter_id))
+    
+    # Forward letter (direct SQL since there might not be a db.forward_letter method)
     db = WBSEDCLDatabase()
     conn = db.connect()
     cursor = conn.cursor()
     
     try:
-        # Get current letter info
-        cursor.execute('SELECT current_holder, current_section_id FROM letters WHERE letter_id = ?', (letter_id,))
-        letter_info = cursor.fetchone()
-        
-        if not letter_info:
-            flash('Letter not found.', 'error')
-            db.close()
-            return redirect(url_for('letters_list'))
-        
-        from_user_id, from_section_id = letter_info
-        
         # Get to_user section
         cursor.execute('SELECT section_id FROM users WHERE user_id = ?', (to_user,))
         to_section_result = cursor.fetchone()
         to_section_id = to_section_result[0] if to_section_result else None
         
-        # Set previous movements to not current
-        cursor.execute('UPDATE letter_movements SET is_current = 0 WHERE letter_id = ?', (letter_id,))
+        # Set previous movements to not current (NO out_date)
+        cursor.execute('''
+            UPDATE letter_movements 
+            SET is_current = 0
+            WHERE letter_id = ? AND is_current = 1
+        ''', (letter_id,))
         
         # Create new movement
         cursor.execute('''
@@ -2383,7 +2724,7 @@ def forward_letter_route(letter_id):
                 forwarded_by, forwarded_date, action_taken, comments, is_current
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
         ''', (
-            letter_id, from_user_id, int(to_user), from_section_id, to_section_id,
+            letter_id, current_holder, int(to_user), current_user.section_id, to_section_id,
             current_user.id, forward_date, action, comments
         ))
         

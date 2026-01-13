@@ -21,13 +21,14 @@
                 <div class="card-body">
                     <form method="GET" action="{{ url_for('advanced_search') }}" id="searchForm">
                         <div class="row">
-                            <!-- Document Type -->
+                            <!-- Document Type - UPDATED WITH LETTERS -->
                             <div class="col-md-3 mb-3">
                                 <label class="form-label">Document Type</label>
                                 <select class="form-select" name="doc_type" id="doc_type">
                                     <option value="all" {% if filters.doc_type == 'all' %}selected{% endif %}>All Documents</option>
                                     <option value="notesheet" {% if filters.doc_type == 'notesheet' %}selected{% endif %}>Notesheets Only</option>
                                     <option value="bill" {% if filters.doc_type == 'bill' %}selected{% endif %}>Bills Only</option>
+                                    <option value="letter" {% if filters.doc_type == 'letter' %}selected{% endif %}>Letters Only</option>
                                 </select>
                             </div>
 
@@ -145,7 +146,7 @@
                 <i class="bi bi-info-circle"></i> Found <strong>{{ results|length }}</strong> document(s) matching your criteria
             </div>
 
-            <!-- Results Table -->
+            <!-- Results Table - UPDATED WITH LETTERS -->
             <div class="card shadow-sm">
                 <div class="card-body">
                     <div class="table-responsive">
@@ -170,8 +171,10 @@
                                     <td>
                                         {% if doc.doc_type == 'notesheet' %}
                                         <span class="badge bg-primary">Notesheet</span>
-                                        {% else %}
+                                        {% elif doc.doc_type == 'bill' %}
                                         <span class="badge bg-success">Bill</span>
+                                        {% elif doc.doc_type == 'letter' %}
+                                        <span class="badge bg-info">Letter</span>
                                         {% endif %}
                                     </td>
                                     <td><strong>{{ doc.doc_number }}</strong></td>
@@ -212,8 +215,13 @@
                                            class="btn btn-sm btn-primary">
                                             <i class="bi bi-eye"></i> View
                                         </a>
-                                        {% else %}
+                                        {% elif doc.doc_type == 'bill' %}
                                         <a href="{{ url_for('bill_detail', bill_id=doc.doc_id) }}" 
+                                           class="btn btn-sm btn-primary">
+                                            <i class="bi bi-eye"></i> View
+                                        </a>
+                                        {% elif doc.doc_type == 'letter' %}
+                                        <a href="{{ url_for('letter_detail', letter_id=doc.doc_id) }}" 
                                            class="btn btn-sm btn-primary">
                                             <i class="bi bi-eye"></i> View
                                         </a>
