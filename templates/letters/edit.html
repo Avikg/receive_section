@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Letter - WBSEDCL{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-10">
+            <div class="card">
+                <div class="card-header bg-warning text-dark">
+                    <h4 class="mb-0"><i class="bi bi-pencil-square"></i> Edit Letter</h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> <strong>Admin Mode:</strong> You are editing this letter. Changes will be logged.
+                    </div>
+                    
+                    <form method="POST" class="needs-validation" novalidate>
+                        <!-- Letter Information -->
+                        <h5 class="mb-3 text-primary"><i class="bi bi-envelope"></i> Letter Information</h5>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="letter_number" class="form-label">Letter Number *</label>
+                                <input type="text" class="form-control" id="letter_number" name="letter_number" 
+                                       value="{{ letter.letter_number }}" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="reference_number" class="form-label">Reference Number</label>
+                                <input type="text" class="form-control" id="reference_number" name="reference_number" 
+                                       value="{{ letter.reference_number or '' }}">
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="subject" class="form-label">Subject *</label>
+                            <textarea class="form-control" id="subject" name="subject" rows="2" required>{{ letter.subject }}</textarea>
+                        </div>
+                        
+                        <hr class="my-4">
+                        
+                        <!-- Sender Information -->
+                        <h5 class="mb-3 text-info"><i class="bi bi-person"></i> Sender Information</h5>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="sender_name" class="form-label">Sender Name *</label>
+                                <input type="text" class="form-control" id="sender_name" name="sender_name" 
+                                       value="{{ letter.sender_name }}" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="sender_organization" class="form-label">Sender Organization</label>
+                                <input type="text" class="form-control" id="sender_organization" name="sender_organization" 
+                                       value="{{ letter.sender_organization or '' }}">
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="sender_address" class="form-label">Sender Address</label>
+                            <textarea class="form-control" id="sender_address" name="sender_address" rows="2">{{ letter.sender_address or '' }}</textarea>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="sender_email" class="form-label">Sender Email</label>
+                                <input type="email" class="form-control" id="sender_email" name="sender_email" 
+                                       value="{{ letter.sender_email or '' }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="sender_phone" class="form-label">Sender Phone</label>
+                                <input type="tel" class="form-control" id="sender_phone" name="sender_phone" 
+                                       value="{{ letter.sender_phone or '' }}">
+                            </div>
+                        </div>
+                        
+                        <hr class="my-4">
+                        
+                        <!-- Letter Details -->
+                        <h5 class="mb-3 text-secondary"><i class="bi bi-info-circle"></i> Letter Details</h5>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label for="letter_date" class="form-label">Letter Date</label>
+                                <input type="date" class="form-control" id="letter_date" name="letter_date" 
+                                       value="{{ letter.letter_date or '' }}">
+                            </div>
+                            <div class="col-md-4">
+                                <label for="received_date" class="form-label">Received Date *</label>
+                                <input type="date" class="form-control" id="received_date" name="received_date" 
+                                       value="{{ letter.received_date }}" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="category" class="form-label">Category</label>
+                                <select class="form-select" id="category" name="category">
+                                    <option value="">Select Category</option>
+                                    <option value="Administrative" {% if letter.category == 'Administrative' %}selected{% endif %}>Administrative</option>
+                                    <option value="Technical" {% if letter.category == 'Technical' %}selected{% endif %}>Technical</option>
+                                    <option value="Financial" {% if letter.category == 'Financial' %}selected{% endif %}>Financial</option>
+                                    <option value="Legal" {% if letter.category == 'Legal' %}selected{% endif %}>Legal</option>
+                                    <option value="Correspondence" {% if letter.category == 'Correspondence' %}selected{% endif %}>Correspondence</option>
+                                    <option value="Other" {% if letter.category == 'Other' %}selected{% endif %}>Other</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label for="priority" class="form-label">Priority *</label>
+                                <select class="form-select" id="priority" name="priority" required>
+                                    <option value="Normal" {% if letter.priority == 'Normal' %}selected{% endif %}>Normal</option>
+                                    <option value="High" {% if letter.priority == 'High' %}selected{% endif %}>High</option>
+                                    <option value="Urgent" {% if letter.priority == 'Urgent' %}selected{% endif %}>Urgent</option>
+                                    <option value="Low" {% if letter.priority == 'Low' %}selected{% endif %}>Low</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="letter_type" class="form-label">Letter Type *</label>
+                                <select class="form-select" id="letter_type" name="letter_type" required>
+                                    <option value="Incoming" {% if letter.letter_type == 'Incoming' %}selected{% endif %}>Incoming</option>
+                                    <option value="Outgoing" {% if letter.letter_type == 'Outgoing' %}selected{% endif %}>Outgoing</option>
+                                    <option value="Internal" {% if letter.letter_type == 'Internal' %}selected{% endif %}>Internal</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Reply Required</label>
+                                <div class="form-check mt-2">
+                                    <input type="checkbox" class="form-check-input" id="reply_required" name="reply_required" 
+                                           {% if letter.reply_required %}checked{% endif %} onchange="toggleReplyDeadline()">
+                                    <label class="form-check-label" for="reply_required">Yes</label>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3" id="replyDeadlineDiv" style="{% if not letter.reply_required %}display:none;{% endif %}">
+                            <label for="reply_deadline" class="form-label">Reply Deadline</label>
+                            <input type="date" class="form-control" id="reply_deadline" name="reply_deadline" 
+                                   value="{{ letter.reply_deadline or '' }}">
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="remarks" class="form-label">Remarks</label>
+                            <textarea class="form-control" id="remarks" name="remarks" rows="3">{{ letter.remarks or '' }}</textarea>
+                        </div>
+                        
+                        <hr class="my-4">
+                        
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-warning btn-lg">
+                                <i class="bi bi-save"></i> Save Changes
+                            </button>
+                            <a href="{{ url_for('letter_detail', letter_id=letter.letter_id) }}" class="btn btn-secondary">
+                                <i class="bi bi-x-circle"></i> Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Toggle reply deadline field
+function toggleReplyDeadline() {
+    const checkbox = document.getElementById('reply_required');
+    const div = document.getElementById('replyDeadlineDiv');
+    div.style.display = checkbox.checked ? 'block' : 'none';
+}
+
+// Form validation
+(function () {
+    'use strict'
+    var forms = document.querySelectorAll('.needs-validation')
+    Array.prototype.slice.call(forms).forEach(function (form) {
+        form.addEventListener('submit', function (event) {
+            if (!form.checkValidity()) {
+                event.preventDefault()
+                event.stopPropagation()
+            }
+            form.classList.add('was-validated')
+        }, false)
+    })
+})()
+</script>
+{% endblock %}

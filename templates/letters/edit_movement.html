@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Letter Movement - WBSEDCL{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-warning text-dark">
+                    <h4 class="mb-0"><i class="bi bi-pencil"></i> Edit Letter Movement</h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> <strong>Letter:</strong> {{ movement.letter_number }}<br>
+                        <small>Editing movement ID: {{ movement.movement_id }}</small>
+                    </div>
+                    
+                    <form method="POST" class="needs-validation" novalidate>
+                        <div class="mb-3">
+                            <label for="forwarded_date" class="form-label">Forward Date *</label>
+                            <input type="date" class="form-control" id="forwarded_date" name="forwarded_date" 
+                                   value="{{ movement.forwarded_date[:10] }}" required>
+                            <small class="text-muted">Change the date when this movement occurred</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="comments" class="form-label">Comments</label>
+                            <textarea class="form-control" id="comments" name="comments" rows="3">{{ movement.comments or '' }}</textarea>
+                            <small class="text-muted">Update or add comments for this movement</small>
+                        </div>
+                        
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle"></i> <strong>Warning:</strong> Changing the date will affect time calculations in movement history.
+                        </div>
+                        
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-warning btn-lg">
+                                <i class="bi bi-save"></i> Save Changes
+                            </button>
+                            <a href="{{ url_for('letter_detail', letter_id=movement.letter_id) }}" class="btn btn-secondary">
+                                <i class="bi bi-x-circle"></i> Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Form validation
+(function () {
+    'use strict'
+    var forms = document.querySelectorAll('.needs-validation')
+    Array.prototype.slice.call(forms).forEach(function (form) {
+        form.addEventListener('submit', function (event) {
+            if (!form.checkValidity()) {
+                event.preventDefault()
+                event.stopPropagation()
+            }
+            form.classList.add('was-validated')
+        }, false)
+    })
+})()
+</script>
+{% endblock %}

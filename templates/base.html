@@ -58,6 +58,13 @@
                     </a>
                 </li>
 
+                <!-- NEW: Letters Menu Item -->
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('letters_list') }}">
+                        <i class="bi bi-envelope"></i> Letters
+                    </a>
+                </li>
+
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
                         <i class="bi bi-search"></i> Search & Reports
@@ -77,6 +84,7 @@
                 </li>
 
                 {% if current_user.can_receive() %}
+                <!-- UPDATED: Receive Dropdown with Letters -->
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
                         <i class="bi bi-inbox"></i> Receive
@@ -90,6 +98,11 @@
                         <li>
                             <a class="dropdown-item" href="{{ url_for('receive_bill') }}">
                                 <i class="bi bi-receipt"></i> Receive Bill
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item" href="{{ url_for('receive_letter') }}">
+                                <i class="bi bi-envelope"></i> Receive Letter
                             </a>
                         </li>
                     </ul>
@@ -172,7 +185,7 @@
 <footer class="footer mt-auto py-3 bg-light">
     <div class="container text-center">
         <span class="text-muted">
-            © 2025 West Bengal State Electricity Distribution Company Limited
+            © 2025 West Bengal State Electricity Distribution Company Limited | Built by Avik
         </span>
     </div>
 </footer>

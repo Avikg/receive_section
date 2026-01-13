@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}Parked Notesheets - WBSEDCL{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col">
+            <h2><i class="bi bi-pause-circle"></i> Parked Notesheets</h2>
+        </div>
+        <div class="col-auto">
+            <a href="{{ url_for('notesheets_list') }}" class="btn btn-secondary">
+                <i class="bi bi-arrow-left"></i> Back to List
+            </a>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            {% if parked %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Notesheet #</th>
+                            <th>Subject</th>
+                            <th>Sender</th>
+                            <th>Received Date</th>
+                            <th>Parked By</th>
+                            <th>Parked Date</th>
+                            <th>Days Parked</th>
+                            <th>Reason</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for ns in parked %}
+                        <tr class="table-warning">
+                            <td>
+                                <a href="{{ url_for('notesheet_detail', notesheet_id=ns.notesheet_id) }}">
+                                    {{ ns.notesheet_number }}
+                                </a>
+                            </td>
+                            <td>{{ ns.subject[:40] }}{% if ns.subject|length > 40 %}...{% endif %}</td>
+                            <td>{{ ns.sender_name }}</td>
+                            <td>{{ ns.received_date }}</td>
+                            <td>{{ ns.parked_by_name }}</td>
+                            <td>{{ ns.parked_date[:10] }}</td>
+                            <td>
+                                {% if ns.days_parked <= 3 %}
+                                <span class="badge bg-success">{{ ns.days_parked }} days</span>
+                                {% elif ns.days_parked <= 7 %}
+                                <span class="badge bg-warning">{{ ns.days_parked }} days</span>
+                                {% else %}
+                                <span class="badge bg-danger">{{ ns.days_parked }} days</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ ns.parked_reason }}</td>
+                            <td>
+                                <a href="{{ url_for('notesheet_detail', notesheet_id=ns.notesheet_id) }}" 
+                                   class="btn btn-sm btn-primary">
+                                    <i class="bi bi-eye"></i> View
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="bi bi-inbox" style="font-size: 3rem; color: #ccc;"></i>
+                <p class="mt-3 text-muted">No parked notesheets found.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

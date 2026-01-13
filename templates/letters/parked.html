@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block title %}Parked Letters - WBSEDCL{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col">
+            <h2><i class="bi bi-pause-circle"></i> Parked Letters</h2>
+        </div>
+        <div class="col-auto">
+            <a href="{{ url_for('letters_list') }}" class="btn btn-secondary">
+                <i class="bi bi-arrow-left"></i> Back to Letters
+            </a>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            {% if parked %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Letter #</th>
+                            <th>Subject</th>
+                            <th>Sender</th>
+                            <th>Priority</th>
+                            <th>Parked By</th>
+                            <th>Parked Date</th>
+                            <th>Days Parked</th>
+                            <th>Reason</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for letter in parked %}
+                        <tr>
+                            <td>{{ letter.letter_number }}</td>
+                            <td>{{ letter.subject[:50] }}...</td>
+                            <td>{{ letter.sender_name }}</td>
+                            <td>
+                                {% if letter.priority == 'Urgent' %}
+                                <span class="badge bg-danger">Urgent</span>
+                                {% elif letter.priority == 'High' %}
+                                <span class="badge bg-warning">High</span>
+                                {% else %}
+                                <span class="badge bg-secondary">{{ letter.priority }}</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ letter.parked_by_name }}</td>
+                            <td>{{ letter.parked_date }}</td>
+                            <td>
+                                {% if letter.days_parked <= 3 %}
+                                <span class="badge bg-success">{{ letter.days_parked }} days</span>
+                                {% elif letter.days_parked <= 7 %}
+                                <span class="badge bg-warning">{{ letter.days_parked }} days</span>
+                                {% else %}
+                                <span class="badge bg-danger">{{ letter.days_parked }} days</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ letter.parked_reason }}</td>
+                            <td>
+                                <a href="{{ url_for('letter_detail', letter_id=letter.letter_id) }}" 
+                                   class="btn btn-sm btn-primary">
+                                    <i class="bi bi-eye"></i> View
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="bi bi-check-circle" style="font-size: 3rem; color: #28a745;"></i>
+                <p class="mt-3 text-muted">No parked letters.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

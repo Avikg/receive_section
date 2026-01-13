@@ -375,6 +375,11 @@ def user_profile():
     
     return render_template('user_profile.html', user=user, sections=sections)
 
+# =============================================================================
+# UPDATED DASHBOARD ROUTE - Replace existing dashboard route in app.py
+# This includes Letters statistics
+# =============================================================================
+
 @app.route('/dashboard')
 @login_required
 def dashboard():
@@ -384,6 +389,7 @@ def dashboard():
     cursor = conn.cursor()
     
     # Get statistics for CURRENT USER ONLY
+    
     # My Notesheets - where I'm the current holder
     cursor.execute('SELECT COUNT(*) FROM notesheets WHERE current_holder = ?', (current_user.id,))
     my_notesheets = cursor.fetchone()[0]
@@ -402,8 +408,20 @@ def dashboard():
                    (current_user.id,))
     my_pending_bills = cursor.fetchone()[0]
     
+    # My Letters - where I'm the current holder
+    cursor.execute('SELECT COUNT(*) FROM letters WHERE current_holder = ?', (current_user.id,))
+    my_letters = cursor.fetchone()[0]
+    
+    # My Pending Letters - where I'm the current holder and status is not Closed/Replied
+    cursor.execute("""
+        SELECT COUNT(*) FROM letters 
+        WHERE current_holder = ? 
+        AND current_status NOT IN ('Closed', 'Replied', 'Archived')
+    """, (current_user.id,))
+    my_pending_letters = cursor.fetchone()[0]
+    
     # Total items with me (for "My Pending Items" card)
-    my_pending_items = my_pending_notesheets + my_pending_bills
+    my_pending_items = my_pending_notesheets + my_pending_bills + my_pending_letters
     
     # Get parked documents count (Receive Section only)
     parked_count = 0
@@ -412,7 +430,9 @@ def dashboard():
         parked_ns = cursor.fetchone()[0]
         cursor.execute('SELECT COUNT(*) FROM bills WHERE is_parked = 1')
         parked_bills = cursor.fetchone()[0]
-        parked_count = parked_ns + parked_bills
+        cursor.execute('SELECT COUNT(*) FROM letters WHERE is_parked = 1')
+        parked_letters = cursor.fetchone()[0]
+        parked_count = parked_ns + parked_bills + parked_letters
     
     # Get recent notesheets (last 5)
     cursor.execute('''
@@ -438,6 +458,18 @@ def dashboard():
     columns = [desc[0] for desc in cursor.description]
     recent_bills = [dict(zip(columns, row)) for row in recent_bills]
     
+    # Get recent letters (last 5)
+    cursor.execute('''
+        SELECT letter_id, letter_number, subject, received_date, current_status, reply_required
+        FROM letters
+        WHERE current_holder = ?
+        ORDER BY received_date DESC
+        LIMIT 5
+    ''', (current_user.id,))
+    recent_letters = cursor.fetchall()
+    columns = [desc[0] for desc in cursor.description]
+    recent_letters = [dict(zip(columns, row)) for row in recent_letters]
+    
     db.close()
     
     stats = {
@@ -445,6 +477,8 @@ def dashboard():
         'pending_notesheets': my_pending_notesheets,
         'total_bills': my_bills,
         'pending_bills': my_pending_bills,
+        'total_letters': my_letters,
+        'pending_letters': my_pending_letters,
         'my_pending_items': my_pending_items,
         'parked_items': parked_count
     }
@@ -452,7 +486,9 @@ def dashboard():
     return render_template('dashboard.html', 
                          stats=stats, 
                          recent_notesheets=recent_notesheets,
-                         recent_bills=recent_bills)
+                         recent_bills=recent_bills,
+                         recent_letters=recent_letters)
+
 
 @app.route('/my-notesheets')
 @login_required
@@ -1914,6 +1950,725 @@ def forward_bill_route(bill_id):
     db.close()
     return redirect(url_for('bill_detail', bill_id=bill_id))
 
+
+
+# =============================================================================
+# LETTER ROUTES - ADD TO app.py AFTER BILL ROUTES (around line 1400)
+# =============================================================================
+
+# Letter routes
+
+@app.route('/letters')
+@login_required
+def letters_list():
+    """List all letters"""
+    db = WBSEDCLDatabase()
+    conn = db.connect()
+    cursor = conn.cursor()
+    
+    # Get search and filter parameters
+    search = request.args.get('search', '')
+    status = request.args.get('status', '')
+    
+    # Build query with section info
+    query = '''
+        SELECT 
+            l.letter_id, l.letter_number, l.subject, l.sender_name,
+            l.received_date, l.current_status, l.priority, l.is_parked,
+            l.letter_type, l.reply_required,
+            u.full_name as current_holder_name,
+            s.section_name as current_section_name
+        FROM letters l
+        LEFT JOIN users u ON l.current_holder = u.user_id
+        LEFT JOIN sections s ON l.current_section_id = s.section_id
+        WHERE 1=1
+    '''
+    params = []
+    
+    if search:
+        query += ' AND (l.letter_number LIKE ? OR l.subject LIKE ? OR l.sender_name LIKE ?)'
+        search_param = f'%{search}%'
+        params.extend([search_param, search_param, search_param])
+    
+    if status:
+        query += ' AND l.current_status = ?'
+        params.append(status)
+    
+    query += ' ORDER BY l.received_date DESC'
+    
+    cursor.execute(query, params)
+    letters = cursor.fetchall()
+    
+    # Convert to list of dicts
+    columns = [desc[0] for desc in cursor.description]
+    letters = [dict(zip(columns, row)) for row in letters]
+    
+    db.close()
+    
+    return render_template('letters/list.html', letters=letters)
+
+@app.route('/my-letters')
+@login_required
+def my_letters():
+    """Show letters assigned to current user"""
+    db = WBSEDCLDatabase()
+    conn = db.connect()
+    cursor = conn.cursor()
+    
+    # Get letters where current user is the holder
+    cursor.execute('''
+        SELECT 
+            l.letter_id, l.letter_number, l.subject, l.sender_name,
+            l.received_date, l.current_status, l.priority, l.is_parked,
+            l.letter_type, l.reply_required,
+            u.full_name as current_holder_name,
+            s.section_name as current_section_name
+        FROM letters l
+        LEFT JOIN users u ON l.current_holder = u.user_id
+        LEFT JOIN sections s ON l.current_section_id = s.section_id
+        WHERE l.current_holder = ?
+        ORDER BY l.received_date DESC
+    ''', (current_user.id,))
+    
+    letters = cursor.fetchall()
+    
+    # Convert to list of dicts
+    columns = [desc[0] for desc in cursor.description]
+    letters = [dict(zip(columns, row)) for row in letters]
+    
+    db.close()
+    
+    return render_template('letters/list.html', letters=letters, filter_type='my')
+
+@app.route('/letters/<int:letter_id>')
+@login_required
+def letter_detail(letter_id):
+    """View letter details"""
+    db = WBSEDCLDatabase()
+    conn = db.connect()
+    cursor = conn.cursor()
+    
+    # Get letter details with section info
+    cursor.execute('''
+        SELECT 
+            l.*,
+            u1.full_name as current_holder_name,
+            u2.full_name as received_by_name,
+            s.section_name as current_section_name,
+            ss.sub_section_name as current_sub_section_name,
+            CAST(julianday('now') - julianday(l.received_date) AS INTEGER) as days_held
+        FROM letters l
+        LEFT JOIN users u1 ON l.current_holder = u1.user_id
+        LEFT JOIN users u2 ON l.received_by = u2.user_id
+        LEFT JOIN sections s ON l.current_section_id = s.section_id
+        LEFT JOIN sub_sections ss ON l.current_sub_section_id = ss.sub_section_id
+        WHERE l.letter_id = ?
+    ''', (letter_id,))
+    
+    letter = cursor.fetchone()
+    
+    if not letter:
+        db.close()
+        flash('Letter not found.', 'error')
+        return redirect(url_for('letters_list'))
+    
+    # Convert to dict
+    columns = [desc[0] for desc in cursor.description]
+    letter = dict(zip(columns, letter))
+    
+    # Get movement history (newest first - DESC)
+    cursor.execute('''
+        SELECT 
+            lm.*,
+            u1.full_name as from_user_name,
+            u2.full_name as to_user_name,
+            u3.full_name as forwarded_by_name,
+            s1.section_name as from_section_name,
+            s2.section_name as to_section_name,
+            DATE(lm.forwarded_date) as forward_date_only
+        FROM letter_movements lm
+        LEFT JOIN users u1 ON lm.from_user = u1.user_id
+        LEFT JOIN users u2 ON lm.to_user = u2.user_id
+        LEFT JOIN users u3 ON lm.forwarded_by = u3.user_id
+        LEFT JOIN sections s1 ON lm.from_section_id = s1.section_id
+        LEFT JOIN sections s2 ON lm.to_section_id = s2.section_id
+        WHERE lm.letter_id = ?
+        ORDER BY lm.movement_id DESC
+    ''', (letter_id,))
+    
+    movements = cursor.fetchall()
+    columns = [desc[0] for desc in cursor.description]
+    movements = [dict(zip(columns, row)) for row in movements]
+    
+    # Calculate days held
+    from datetime import datetime as dt
+    for i, movement in enumerate(movements):
+        movement['display_date'] = movement['forward_date_only']
+        
+        if i == 0:
+            # Current location
+            try:
+                in_date = dt.strptime(movement['forward_date_only'], '%Y-%m-%d').date()
+                today = dt.now().date()
+                days_diff = (today - in_date).days
+                
+                movement['in_date'] = movement['forward_date_only']
+                movement['out_date'] = 'Present'
+                
+                if days_diff == 0:
+                    movement['time_held'] = "Today (current)"
+                elif days_diff == 1:
+                    movement['time_held'] = "1 day (current)"
+                else:
+                    movement['time_held'] = f"{days_diff} days (current)"
+            except:
+                movement['time_held'] = "Unknown (current)"
+        elif i == len(movements) - 1:
+            # Oldest movement
+            movement['in_date'] = movement['forward_date_only']
+            if len(movements) > 1:
+                try:
+                    in_date = dt.strptime(movement['forward_date_only'], '%Y-%m-%d').date()
+                    out_date = dt.strptime(movements[i-1]['forward_date_only'], '%Y-%m-%d').date()
+                    days_diff = (out_date - in_date).days
+                    
+                    movement['out_date'] = movements[i-1]['forward_date_only']
+                    
+                    if days_diff == 0:
+                        movement['time_held'] = "Same day"
+                    elif days_diff == 1:
+                        movement['time_held'] = "1 day"
+                    else:
+                        movement['time_held'] = f"{days_diff} days"
+                except:
+                    movement['out_date'] = 'N/A'
+                    movement['time_held'] = "Error"
+            else:
+                movement['out_date'] = 'Present'
+                movement['time_held'] = "Still here (current)"
+        else:
+            # Middle movements
+            try:
+                in_date = dt.strptime(movement['forward_date_only'], '%Y-%m-%d').date()
+                out_date = dt.strptime(movements[i-1]['forward_date_only'], '%Y-%m-%d').date()
+                days_diff = (out_date - in_date).days
+                
+                movement['in_date'] = movement['forward_date_only']
+                movement['out_date'] = movements[i-1]['forward_date_only']
+                
+                if days_diff == 0:
+                    movement['time_held'] = "Same day"
+                elif days_diff == 1:
+                    movement['time_held'] = "1 day"
+                else:
+                    movement['time_held'] = f"{days_diff} days"
+            except:
+                movement['time_held'] = "Unknown"
+    
+    # Get sections for forwarding dropdown
+    sections = db.get_all_sections()
+    
+    # Determine who can forward based on role
+    can_forward = False
+    users = []
+    
+    current_holder_id = letter['current_holder']
+    
+    if current_user.is_receive_section():
+        # Receive section can always forward
+        can_forward = True
+        cursor.execute('''
+            SELECT u.user_id, u.full_name, u.designation, s.section_name, u.section_id
+            FROM users u
+            LEFT JOIN sections s ON u.section_id = s.section_id
+            WHERE u.is_active = 1 
+            AND u.user_id != ?
+            AND u.is_superuser = 0
+            ORDER BY s.section_name, u.full_name
+        ''', (current_holder_id,))
+        
+    elif current_user.is_section_head() and letter['current_holder'] == current_user.id:
+        # Section heads can forward if they are the current holder
+        can_forward = True
+        cursor.execute('''
+            SELECT DISTINCT u.user_id, u.full_name, u.designation, s.section_name, u.section_id
+            FROM users u
+            LEFT JOIN sections s ON u.section_id = s.section_id
+            LEFT JOIN user_role_mapping urm ON u.user_id = urm.user_id
+            LEFT JOIN user_roles ur ON urm.role_id = ur.role_id
+            WHERE u.is_active = 1 
+            AND u.user_id != ?
+            AND u.is_superuser = 0
+            AND (
+                u.section_id = ?
+                OR ur.role_name = 'section_head'
+                OR ur.role_name = 'receive_section'
+            )
+            ORDER BY s.section_name, u.full_name
+        ''', (current_user.id, current_user.section_id))
+        
+    elif letter['current_holder'] == current_user.id:
+        # Sectional users can forward to their section head
+        can_forward = True
+        cursor.execute('''
+            SELECT u.user_id, u.full_name, u.designation, s.section_name, u.section_id
+            FROM users u
+            LEFT JOIN sections s ON u.section_id = s.section_id
+            LEFT JOIN user_role_mapping urm ON u.user_id = urm.user_id
+            LEFT JOIN user_roles ur ON urm.role_id = ur.role_id
+            WHERE u.is_active = 1 
+            AND u.section_id = ?
+            AND ur.role_name = 'section_head'
+            AND u.user_id != ?
+            AND u.is_superuser = 0
+            ORDER BY u.full_name
+        ''', (current_user.section_id, current_user.id))
+    
+    users = cursor.fetchall()
+    columns = [desc[0] for desc in cursor.description]
+    users = [dict(zip(columns, row)) for row in users]
+    
+    db.close()
+    
+    return render_template('letters/detail.html', 
+                         letter=letter, 
+                         movements=movements, 
+                         users=users,
+                         sections=sections,
+                         can_forward=can_forward)
+
+@app.route('/letters/receive', methods=['GET', 'POST'])
+@login_required
+@receive_permission_required
+def receive_letter():
+    """Receive a new letter"""
+    if request.method == 'POST':
+        db = WBSEDCLDatabase()
+        conn = db.connect()
+        cursor = conn.cursor()
+        
+        try:
+            # Get form data
+            letter_data = {
+                'letter_number': request.form.get('letter_number'),
+                'subject': request.form.get('subject'),
+                'sender_name': request.form.get('sender_name'),
+                'sender_organization': request.form.get('sender_organization'),
+                'sender_address': request.form.get('sender_address'),
+                'sender_email': request.form.get('sender_email'),
+                'sender_phone': request.form.get('sender_phone'),
+                'reference_number': request.form.get('reference_number'),
+                'letter_date': request.form.get('letter_date'),
+                'received_date': request.form.get('received_date'),
+                'category': request.form.get('category'),
+                'priority': request.form.get('priority', 'Normal'),
+                'letter_type': request.form.get('letter_type', 'Incoming'),
+                'reply_required': 1 if request.form.get('reply_required') else 0,
+                'reply_deadline': request.form.get('reply_deadline') if request.form.get('reply_required') else None,
+                'remarks': request.form.get('remarks'),
+                'received_by': current_user.id,
+                'current_section_id': current_user.section_id or 1
+            }
+            
+            # Insert letter
+            cursor.execute('''
+                INSERT INTO letters (
+                    letter_number, subject, sender_name, sender_organization,
+                    sender_address, sender_email, sender_phone, reference_number,
+                    letter_date, received_date, category, priority, letter_type,
+                    reply_required, reply_deadline, remarks, received_by,
+                    current_section_id, current_holder
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                letter_data['letter_number'], letter_data['subject'], letter_data['sender_name'],
+                letter_data['sender_organization'], letter_data['sender_address'],
+                letter_data['sender_email'], letter_data['sender_phone'],
+                letter_data['reference_number'], letter_data['letter_date'],
+                letter_data['received_date'], letter_data['category'], letter_data['priority'],
+                letter_data['letter_type'], letter_data['reply_required'],
+                letter_data['reply_deadline'], letter_data['remarks'],
+                letter_data['received_by'], letter_data['current_section_id'],
+                current_user.id
+            ))
+            
+            letter_id = cursor.lastrowid
+            
+            # Create initial movement (received by current user)
+            cursor.execute('''
+                INSERT INTO letter_movements (
+                    letter_id, to_user, to_section_id, forwarded_by,
+                    forwarded_date, action_taken, is_current
+                ) VALUES (?, ?, ?, ?, ?, ?, 1)
+            ''', (
+                letter_id, current_user.id, current_user.section_id,
+                current_user.id, letter_data['received_date'], 'Received'
+            ))
+            
+            conn.commit()
+            
+            # Log activity
+            db.log_activity(
+                current_user.id,
+                'letter_received',
+                f"Received letter: {letter_data['letter_number']}",
+                request.remote_addr
+            )
+            
+            flash('Letter received successfully!', 'success')
+            db.close()
+            return redirect(url_for('letter_detail', letter_id=letter_id))
+            
+        except Exception as e:
+            conn.rollback()
+            db.close()
+            flash(f'Error receiving letter: {str(e)}', 'error')
+            return redirect(url_for('receive_letter'))
+    
+    # GET - show form
+    today = datetime.now().strftime('%Y-%m-%d')
+    return render_template('letters/receive.html', today=today)
+
+
+# =============================================================================
+# LETTER ROUTES - PART 2 (Forward, Park, Admin Edit)
+# ADD TO app.py AFTER PART 1
+# =============================================================================
+
+@app.route('/letters/<int:letter_id>/forward', methods=['POST'])
+@login_required
+@forward_permission_required
+def forward_letter_route(letter_id):
+    """Forward a letter to another user"""
+    to_user = request.form.get('to_user')
+    action = request.form.get('action', 'Forwarded')
+    comments = request.form.get('comments')
+    forward_date = request.form.get('forward_date')
+    
+    if not to_user:
+        flash('Please select a user to forward to.', 'error')
+        return redirect(url_for('letter_detail', letter_id=letter_id))
+    
+    if not forward_date:
+        flash('Please provide forward date.', 'error')
+        return redirect(url_for('letter_detail', letter_id=letter_id))
+    
+    db = WBSEDCLDatabase()
+    conn = db.connect()
+    cursor = conn.cursor()
+    
+    try:
+        # Get current letter info
+        cursor.execute('SELECT current_holder, current_section_id FROM letters WHERE letter_id = ?', (letter_id,))
+        letter_info = cursor.fetchone()
+        
+        if not letter_info:
+            flash('Letter not found.', 'error')
+            db.close()
+            return redirect(url_for('letters_list'))
+        
+        from_user_id, from_section_id = letter_info
+        
+        # Get to_user section
+        cursor.execute('SELECT section_id FROM users WHERE user_id = ?', (to_user,))
+        to_section_result = cursor.fetchone()
+        to_section_id = to_section_result[0] if to_section_result else None
+        
+        # Set previous movements to not current
+        cursor.execute('UPDATE letter_movements SET is_current = 0 WHERE letter_id = ?', (letter_id,))
+        
+        # Create new movement
+        cursor.execute('''
+            INSERT INTO letter_movements (
+                letter_id, from_user, to_user, from_section_id, to_section_id,
+                forwarded_by, forwarded_date, action_taken, comments, is_current
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+        ''', (
+            letter_id, from_user_id, int(to_user), from_section_id, to_section_id,
+            current_user.id, forward_date, action, comments
+        ))
+        
+        # Update letter's current holder and section
+        cursor.execute('''
+            UPDATE letters SET 
+                current_holder = ?,
+                current_section_id = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE letter_id = ?
+        ''', (int(to_user), to_section_id, letter_id))
+        
+        conn.commit()
+        
+        # Log activity
+        db.log_activity(
+            current_user.id,
+            'letter_forwarded',
+            f"Forwarded letter ID {letter_id} to user ID {to_user} on {forward_date}",
+            request.remote_addr
+        )
+        
+        flash('Letter forwarded successfully!', 'success')
+        
+    except Exception as e:
+        conn.rollback()
+        flash(f'Error forwarding letter: {str(e)}', 'error')
+    
+    db.close()
+    return redirect(url_for('letter_detail', letter_id=letter_id))
+
+@app.route('/letters/<int:letter_id>/park', methods=['POST'])
+@login_required
+@receive_permission_required
+def park_letter_route(letter_id):
+    """Park a letter in Receive Section"""
+    reason = request.form.get('reason')
+    comments = request.form.get('comments')
+    
+    if not reason:
+        flash('Please provide a reason for parking.', 'error')
+        return redirect(url_for('letter_detail', letter_id=letter_id))
+    
+    db = WBSEDCLDatabase()
+    conn = db.connect()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            UPDATE letters SET
+                is_parked = 1,
+                parked_by = ?,
+                parked_date = CURRENT_TIMESTAMP,
+                parked_reason = ?,
+                parked_comments = ?
+            WHERE letter_id = ?
+        ''', (current_user.id, reason, comments, letter_id))
+        
+        conn.commit()
+        
+        db.log_activity(
+            current_user.id,
+            'letter_parked',
+            f"Parked letter ID {letter_id}",
+            request.remote_addr
+        )
+        
+        flash('Letter parked successfully!', 'success')
+        
+    except Exception as e:
+        conn.rollback()
+        flash(f'Error parking letter: {str(e)}', 'error')
+    
+    db.close()
+    return redirect(url_for('letters_list'))
+
+@app.route('/letters/parked')
+@login_required
+@receive_permission_required
+def parked_letters():
+    """View all parked letters"""
+    db = WBSEDCLDatabase()
+    conn = db.connect()
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT 
+            l.*,
+            u.full_name as parked_by_name,
+            CAST((julianday('now') - julianday(l.parked_date)) AS INTEGER) as days_parked
+        FROM letters l
+        LEFT JOIN users u ON l.parked_by = u.user_id
+        WHERE l.is_parked = 1
+        ORDER BY l.parked_date DESC
+    ''')
+    
+    parked = cursor.fetchall()
+    columns = [desc[0] for desc in cursor.description]
+    parked = [dict(zip(columns, row)) for row in parked]
+    
+    db.close()
+    
+    return render_template('letters/parked.html', parked=parked)
+
+# Admin Edit Routes for Letters
+
+@app.route('/letters/<int:letter_id>/edit', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def edit_letter(letter_id):
+    """Edit letter - superuser only"""
+    db = WBSEDCLDatabase()
+    conn = db.connect()
+    cursor = conn.cursor()
+    
+    if request.method == 'POST':
+        try:
+            # Update letter
+            cursor.execute('''
+                UPDATE letters SET
+                    letter_number = ?,
+                    subject = ?,
+                    sender_name = ?,
+                    sender_organization = ?,
+                    sender_address = ?,
+                    sender_email = ?,
+                    sender_phone = ?,
+                    reference_number = ?,
+                    letter_date = ?,
+                    received_date = ?,
+                    category = ?,
+                    priority = ?,
+                    letter_type = ?,
+                    reply_required = ?,
+                    reply_deadline = ?,
+                    remarks = ?
+                WHERE letter_id = ?
+            ''', (
+                request.form.get('letter_number'),
+                request.form.get('subject'),
+                request.form.get('sender_name'),
+                request.form.get('sender_organization'),
+                request.form.get('sender_address'),
+                request.form.get('sender_email'),
+                request.form.get('sender_phone'),
+                request.form.get('reference_number'),
+                request.form.get('letter_date'),
+                request.form.get('received_date'),
+                request.form.get('category'),
+                request.form.get('priority'),
+                request.form.get('letter_type'),
+                1 if request.form.get('reply_required') else 0,
+                request.form.get('reply_deadline') if request.form.get('reply_required') else None,
+                request.form.get('remarks'),
+                letter_id
+            ))
+            conn.commit()
+            
+            db.log_activity(current_user.id, 'letter_edited',
+                           f"Edited letter ID {letter_id}",
+                           request.remote_addr)
+            
+            flash('Letter updated successfully!', 'success')
+            db.close()
+            return redirect(url_for('letter_detail', letter_id=letter_id))
+            
+        except Exception as e:
+            conn.rollback()
+            db.close()
+            flash(f'Error updating letter: {str(e)}', 'error')
+            return redirect(url_for('edit_letter', letter_id=letter_id))
+    
+    # GET - show form
+    cursor.execute('SELECT * FROM letters WHERE letter_id = ?', (letter_id,))
+    letter = cursor.fetchone()
+    
+    if not letter:
+        db.close()
+        flash('Letter not found.', 'error')
+        return redirect(url_for('letters_list'))
+    
+    columns = [desc[0] for desc in cursor.description]
+    letter = dict(zip(columns, letter))
+    
+    db.close()
+    return render_template('letters/edit.html', letter=letter)
+
+@app.route('/movements/letter/<int:movement_id>/edit', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def edit_letter_movement(movement_id):
+    """Edit letter movement - superuser only"""
+    db = WBSEDCLDatabase()
+    conn = db.connect()
+    cursor = conn.cursor()
+    
+    if request.method == 'POST':
+        try:
+            cursor.execute('''
+                UPDATE letter_movements SET
+                    forwarded_date = ?,
+                    comments = ?
+                WHERE movement_id = ?
+            ''', (
+                request.form.get('forwarded_date'),
+                request.form.get('comments'),
+                movement_id
+            ))
+            conn.commit()
+            
+            cursor.execute('SELECT letter_id FROM letter_movements WHERE movement_id = ?', (movement_id,))
+            letter_id = cursor.fetchone()[0]
+            
+            db.log_activity(current_user.id, 'movement_edited',
+                           f"Edited letter movement ID {movement_id}",
+                           request.remote_addr)
+            
+            flash('Movement updated successfully!', 'success')
+            db.close()
+            return redirect(url_for('letter_detail', letter_id=letter_id))
+            
+        except Exception as e:
+            conn.rollback()
+            db.close()
+            flash(f'Error updating movement: {str(e)}', 'error')
+    
+    # GET - show form
+    cursor.execute('''
+        SELECT lm.*, l.letter_number
+        FROM letter_movements lm
+        JOIN letters l ON lm.letter_id = l.letter_id
+        WHERE lm.movement_id = ?
+    ''', (movement_id,))
+    movement = cursor.fetchone()
+    
+    if not movement:
+        db.close()
+        flash('Movement not found.', 'error')
+        return redirect(url_for('letters_list'))
+    
+    columns = [desc[0] for desc in cursor.description]
+    movement = dict(zip(columns, movement))
+    
+    db.close()
+    return render_template('letters/edit_movement.html', movement=movement)
+
+@app.route('/movements/letter/<int:movement_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def delete_letter_movement(movement_id):
+    """Delete letter movement - superuser only"""
+    db = WBSEDCLDatabase()
+    conn = db.connect()
+    cursor = conn.cursor()
+    
+    try:
+        # Get letter_id before deleting
+        cursor.execute('SELECT letter_id FROM letter_movements WHERE movement_id = ?', (movement_id,))
+        result = cursor.fetchone()
+        
+        if not result:
+            db.close()
+            flash('Movement not found.', 'error')
+            return redirect(url_for('letters_list'))
+        
+        letter_id = result[0]
+        
+        # Delete the movement
+        cursor.execute('DELETE FROM letter_movements WHERE movement_id = ?', (movement_id,))
+        conn.commit()
+        
+        db.log_activity(current_user.id, 'movement_deleted',
+                       f"Deleted letter movement ID {movement_id}",
+                       request.remote_addr)
+        
+        flash('Movement deleted successfully!', 'success')
+        db.close()
+        return redirect(url_for('letter_detail', letter_id=letter_id))
+        
+    except Exception as e:
+        conn.rollback()
+        db.close()
+        flash(f'Error deleting movement: {str(e)}', 'error')
+        return redirect(url_for('letters_list'))
+# =============================================================================
 # Admin routes
 
 @app.route('/admin/users')
@@ -2913,6 +3668,154 @@ def delete_bill_movement(movement_id):
     db.close()
     flash('Movement deleted successfully!', 'success')
     return redirect(url_for('bill_detail', bill_id=bill_id))
+
+
+# =============================================================================
+# DELETE ROUTES FOR DOCUMENTS (Notesheets, Bills, Letters)
+# =============================================================================
+
+# Delete Notesheet
+@app.route('/notesheets/<int:notesheet_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def delete_notesheet(notesheet_id):
+    """Delete notesheet - superuser only"""
+    db = WBSEDCLDatabase()
+    conn = db.connect()
+    cursor = conn.cursor()
+    
+    try:
+        # Get notesheet info before deleting
+        cursor.execute('SELECT notesheet_number FROM notesheets WHERE notesheet_id = ?', (notesheet_id,))
+        result = cursor.fetchone()
+        
+        if not result:
+            flash('Notesheet not found.', 'error')
+            db.close()
+            return redirect(url_for('notesheets_list'))
+        
+        notesheet_number = result[0]
+        
+        # Delete movements first (foreign key)
+        cursor.execute('DELETE FROM notesheet_movements WHERE notesheet_id = ?', (notesheet_id,))
+        
+        # Delete notesheet
+        cursor.execute('DELETE FROM notesheets WHERE notesheet_id = ?', (notesheet_id,))
+        
+        conn.commit()
+        
+        # Log activity
+        db.log_activity(
+            current_user.id,
+            'notesheet_deleted',
+            f"Deleted notesheet: {notesheet_number} (ID: {notesheet_id})",
+            request.remote_addr
+        )
+        
+        flash(f'Notesheet "{notesheet_number}" deleted successfully!', 'success')
+        
+    except Exception as e:
+        conn.rollback()
+        flash(f'Error deleting notesheet: {str(e)}', 'error')
+    
+    db.close()
+    return redirect(url_for('notesheets_list'))
+
+# Delete Bill
+@app.route('/bills/<int:bill_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def delete_bill(bill_id):
+    """Delete bill - superuser only"""
+    db = WBSEDCLDatabase()
+    conn = db.connect()
+    cursor = conn.cursor()
+    
+    try:
+        # Get bill info before deleting
+        cursor.execute('SELECT bill_number FROM bills WHERE bill_id = ?', (bill_id,))
+        result = cursor.fetchone()
+        
+        if not result:
+            flash('Bill not found.', 'error')
+            db.close()
+            return redirect(url_for('bills_list'))
+        
+        bill_number = result[0]
+        
+        # Delete movements first (foreign key)
+        cursor.execute('DELETE FROM bill_movements WHERE bill_id = ?', (bill_id,))
+        
+        # Delete bill
+        cursor.execute('DELETE FROM bills WHERE bill_id = ?', (bill_id,))
+        
+        conn.commit()
+        
+        # Log activity
+        db.log_activity(
+            current_user.id,
+            'bill_deleted',
+            f"Deleted bill: {bill_number} (ID: {bill_id})",
+            request.remote_addr
+        )
+        
+        flash(f'Bill "{bill_number}" deleted successfully!', 'success')
+        
+    except Exception as e:
+        conn.rollback()
+        flash(f'Error deleting bill: {str(e)}', 'error')
+    
+    db.close()
+    return redirect(url_for('bills_list'))
+
+# Delete Letter
+@app.route('/letters/<int:letter_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def delete_letter(letter_id):
+    """Delete letter - superuser only"""
+    db = WBSEDCLDatabase()
+    conn = db.connect()
+    cursor = conn.cursor()
+    
+    try:
+        # Get letter info before deleting
+        cursor.execute('SELECT letter_number FROM letters WHERE letter_id = ?', (letter_id,))
+        result = cursor.fetchone()
+        
+        if not result:
+            flash('Letter not found.', 'error')
+            db.close()
+            return redirect(url_for('letters_list'))
+        
+        letter_number = result[0]
+        
+        # Delete movements first (foreign key)
+        cursor.execute('DELETE FROM letter_movements WHERE letter_id = ?', (letter_id,))
+        
+        # Delete letter
+        cursor.execute('DELETE FROM letters WHERE letter_id = ?', (letter_id,))
+        
+        conn.commit()
+        
+        # Log activity
+        db.log_activity(
+            current_user.id,
+            'letter_deleted',
+            f"Deleted letter: {letter_number} (ID: {letter_id})",
+            request.remote_addr
+        )
+        
+        flash(f'Letter "{letter_number}" deleted successfully!', 'success')
+        
+    except Exception as e:
+        conn.rollback()
+        flash(f'Error deleting letter: {str(e)}', 'error')
+    
+    db.close()
+    return redirect(url_for('letters_list'))
+
+
 
 
 # Error handlers

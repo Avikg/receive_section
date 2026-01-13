@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+
+{% block title %}Receive Letter - WBSEDCL{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row mb-4">
+        <div class="col">
+            <h2><i class="bi bi-envelope-plus"></i> Receive New Letter</h2>
+        </div>
+    </div>
+
+    <form method="POST" class="needs-validation" novalidate>
+        <div class="card mb-3">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Letter Information</h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Letter Number *</label>
+                        <input type="text" name="letter_number" class="form-control" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Reference Number</label>
+                        <input type="text" name="reference_number" class="form-control">
+                    </div>
+                    <div class="col-md-12">
+                        <label class="form-label">Subject *</label>
+                        <textarea name="subject" class="form-control" rows="2" required></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">Sender Information</h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Sender Name *</label>
+                        <input type="text" name="sender_name" class="form-control" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Organization</label>
+                        <input type="text" name="sender_organization" class="form-control">
+                    </div>
+                    <div class="col-md-12">
+                        <label class="form-label">Address</label>
+                        <textarea name="sender_address" class="form-control" rows="2"></textarea>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Email</label>
+                        <input type="email" name="sender_email" class="form-control">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Phone</label>
+                        <input type="tel" name="sender_phone" class="form-control">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header bg-secondary text-white">
+                <h5 class="mb-0">Letter Details</h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Letter Date</label>
+                        <input type="date" name="letter_date" class="form-control" value="{{ today }}">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Received Date *</label>
+                        <input type="date" name="received_date" class="form-control" value="{{ today }}" required>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Category</label>
+                        <input type="text" name="category" class="form-control">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Priority *</label>
+                        <select name="priority" class="form-select" required>
+                            <option value="Normal" selected>Normal</option>
+                            <option value="High">High</option>
+                            <option value="Urgent">Urgent</option>
+                            <option value="Low">Low</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Letter Type *</label>
+                        <select name="letter_type" class="form-select" required>
+                            <option value="Incoming" selected>Incoming</option>
+                            <option value="Outgoing">Outgoing</option>
+                            <option value="Internal">Internal</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Reply Required</label>
+                        <div class="form-check mt-2">
+                            <input type="checkbox" name="reply_required" id="replyRequired" class="form-check-input" onchange="toggleReplyDeadline()">
+                            <label class="form-check-label" for="replyRequired">Yes</label>
+                        </div>
+                    </div>
+                    <div class="col-md-12" id="replyDeadlineDiv" style="display:none;">
+                        <label class="form-label">Reply Deadline</label>
+                        <input type="date" name="reply_deadline" class="form-control">
+                    </div>
+                    <div class="col-md-12">
+                        <label class="form-label">Remarks</label>
+                        <textarea name="remarks" class="form-control" rows="3"></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+            <a href="{{ url_for('letters_list') }}" class="btn btn-secondary">
+                <i class="bi bi-x-circle"></i> Cancel
+            </a>
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-check-circle"></i> Receive Letter
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+function toggleReplyDeadline() {
+    const checkbox = document.getElementById('replyRequired');
+    const div = document.getElementById('replyDeadlineDiv');
+    div.style.display = checkbox.checked ? 'block' : 'none';
+}
+</script>
+{% endblock %}
