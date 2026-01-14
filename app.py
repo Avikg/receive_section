@@ -3358,7 +3358,7 @@ def edit_user(user_id):
 @login_required
 @admin_required
 def admin_dashboard():
-    """Admin monitoring dashboard"""
+    """Admin monitoring dashboard - UPDATED WITH LETTERS"""
     db = WBSEDCLDatabase()
     conn = db.connect()
     cursor = conn.cursor()
@@ -3376,11 +3376,19 @@ def admin_dashboard():
     cursor.execute('SELECT COUNT(*) FROM bills')
     total_bills = cursor.fetchone()[0]
     
+    # Add Letters count (NEW!)
+    cursor.execute('SELECT COUNT(*) FROM letters')
+    total_letters = cursor.fetchone()[0]
+    
     cursor.execute('SELECT COUNT(*) FROM notesheet_movements')
     total_ns_movements = cursor.fetchone()[0]
     
     cursor.execute('SELECT COUNT(*) FROM bill_movements')
     total_bill_movements = cursor.fetchone()[0]
+    
+    # Add Letter movements count (NEW!)
+    cursor.execute('SELECT COUNT(*) FROM letter_movements')
+    total_letter_movements = cursor.fetchone()[0]
     
     # Recent Activity (Last 50)
     cursor.execute('''
@@ -3460,8 +3468,10 @@ def admin_dashboard():
         'inactive_users': inactive_users,
         'total_notesheets': total_notesheets,
         'total_bills': total_bills,
+        'total_letters': total_letters,                      # NEW!
         'total_ns_movements': total_ns_movements,
         'total_bill_movements': total_bill_movements,
+        'total_letter_movements': total_letter_movements,    # NEW!
         'failed_logins_24h': failed_logins_24h,
         'active_sessions_today': active_sessions_today
     }
@@ -3471,6 +3481,7 @@ def admin_dashboard():
                          activities=activities,
                          top_users=top_users,
                          ns_daily_activity=ns_daily_activity)
+
 
 @app.route('/admin/logs')
 @login_required

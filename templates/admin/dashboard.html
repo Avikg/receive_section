@@ -60,14 +60,14 @@
                     <h6 class="card-subtitle mb-2 opacity-75">
                         <i class="bi bi-arrow-repeat"></i> Total Movements
                     </h6>
-                    <h2 class="card-title mb-0">{{ stats.total_ns_movements + stats.total_bill_movements }}</h2>
+                    <h2 class="card-title mb-0">{{ stats.total_ns_movements + stats.total_bill_movements + stats.total_letter_movements }}</h2>
                     <small class="opacity-75">Document forwards</small>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Document Stats -->
+    <!-- Document Stats - UPDATED WITH LETTERS -->
     <div class="row g-4 mb-4">
         <div class="col-md-6">
             <div class="card shadow-sm">
@@ -76,15 +76,25 @@
                 </div>
                 <div class="card-body">
                     <div class="row text-center">
-                        <div class="col-6 border-end">
+                        <!-- Notesheets -->
+                        <div class="col-4 border-end">
                             <h3 class="text-primary">{{ stats.total_notesheets }}</h3>
                             <p class="text-muted mb-0">Total Notesheets</p>
                             <small class="text-muted">{{ stats.total_ns_movements }} movements</small>
                         </div>
-                        <div class="col-6">
+                        
+                        <!-- Bills -->
+                        <div class="col-4 border-end">
                             <h3 class="text-success">{{ stats.total_bills }}</h3>
                             <p class="text-muted mb-0">Total Bills</p>
                             <small class="text-muted">{{ stats.total_bill_movements }} movements</small>
+                        </div>
+                        
+                        <!-- Letters (NEW!) -->
+                        <div class="col-4">
+                            <h3 class="text-info">{{ stats.total_letters }}</h3>
+                            <p class="text-muted mb-0">Total Letters</p>
+                            <small class="text-muted">{{ stats.total_letter_movements }} movements</small>
                         </div>
                     </div>
                 </div>
@@ -170,7 +180,7 @@
                                     {% if activity.activity_type == 'login' %}bg-success
                                     {% elif activity.activity_type == 'logout' %}bg-secondary
                                     {% elif activity.activity_type == 'login_failed' %}bg-danger
-                                    {% elif activity.activity_type in ['notesheet_forwarded', 'bill_forwarded'] %}bg-info
+                                    {% elif activity.activity_type in ['notesheet_forwarded', 'bill_forwarded', 'letter_forwarded'] %}bg-info
                                     {% elif activity.activity_type in ['user_created', 'user_updated'] %}bg-warning
                                     {% else %}bg-primary
                                     {% endif %}">
