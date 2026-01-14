@@ -3569,6 +3569,123 @@ def admin_logs():
                              'search': search
                          })
 
+
+@app.route('/admin/logs/export')
+@login_required
+@admin_required
+def export_logs():
+    """Export activity logs to CSV with IP addresses"""
+    import csv
+    from io import StringIO
+    from flask import Response
+    
+    db = WBSEDCLDatabase()
+    conn = db.connect()
+    cursor = conn.cursor()
+    
+    # Get filter parameters (SAME AS admin_logs route)
+    activity_type = request.args.get('type', '')
+    user_id = request.args.get('user', '')
+    date_from = request.args.get('date_from', '')
+    date_to = request.args.get('date_to', '')
+    search = request.args.get('search', '')
+    
+    # Build query - IDENTICAL TO admin_logs route
+    query = '''
+        SELECT 
+            al.log_id,
+            al.created_at,
+            u.full_name,
+            u.username,
+            al.activity_type,
+            al.description,
+            al.ip_address
+        FROM activity_logs al
+        LEFT JOIN users u ON al.user_id = u.user_id
+        WHERE 1=1
+    '''
+    params = []
+    
+    if activity_type:
+        query += ' AND al.activity_type = ?'
+        params.append(activity_type)
+    
+    if user_id:
+        query += ' AND al.user_id = ?'
+        params.append(user_id)
+    
+    if date_from:
+        query += ' AND DATE(al.created_at) >= ?'
+        params.append(date_from)
+    
+    if date_to:
+        query += ' AND DATE(al.created_at) <= ?'
+        params.append(date_to)
+    
+    if search:
+        query += ' AND (al.description LIKE ? OR u.username LIKE ?)'
+        search_param = f'%{search}%'
+        params.extend([search_param, search_param])
+    
+    query += ' ORDER BY al.created_at DESC LIMIT 500'
+    
+    cursor.execute(query, params)
+    logs = cursor.fetchall()
+    
+    # Create CSV
+    si = StringIO()
+    writer = csv.writer(si)
+    
+    # Write header
+    writer.writerow([
+        'ID',
+        'Timestamp',
+        'User',
+        'Username',
+        'Activity Type',
+        'Description',
+        'IP Address'
+    ])
+    
+    # Write data rows
+    for log in logs:
+        # Extract values by index
+        log_id = log[0]              # al.log_id
+        created_at = log[1]          # al.created_at
+        full_name = log[2]           # u.full_name
+        username = log[3]            # u.username
+        activity_type = log[4]       # al.activity_type
+        description = log[5]         # al.description
+        ip_address = log[6]          # al.ip_address
+        
+        # Handle NULL values
+        full_name = full_name if full_name else 'System'
+        username = username if username else '-'
+        activity_type = activity_type.replace('_', ' ').title() if activity_type else '-'
+        description = description if description else '-'
+        ip_address = ip_address if ip_address else '-'
+        
+        writer.writerow([
+            log_id,
+            created_at,
+            full_name,
+            username,
+            activity_type,
+            description,
+            ip_address
+        ])
+    
+    db.close()
+    
+    # Create response
+    output = si.getvalue()
+    si.close()
+    
+    response = Response(output, mimetype='text/csv')
+    response.headers['Content-Disposition'] = 'attachment; filename=activity_logs.csv'
+    
+    return response
+
 # SUPERUSER EDIT ROUTES - INSERT BEFORE "# Error handlers" (line 1133)
     """Edit user - superuser only"""
     db = WBSEDCLDatabase()
