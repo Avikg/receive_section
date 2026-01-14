@@ -3575,6 +3575,9 @@ def admin_logs():
 @admin_required
 def export_logs():
     """Export activity logs to CSV with IP addresses"""
+    print("=" * 80)
+    print("EXPORT LOGS ROUTE CALLED!")
+    print("=" * 80)
     import csv
     from io import StringIO
     from flask import Response

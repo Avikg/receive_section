@@ -151,7 +151,7 @@
                                 {% endif %}
                             </td>
                             <td>
-                                <small class="text-muted font-monospace">{{ log.ip_address }}</small>
+                                <small class="text-muted font-monospace">{{ log.ip_address or '-' }}</small>
                             </td>
                         </tr>
                         {% endfor %}
@@ -172,36 +172,16 @@
 </div>
 
 <script>
+// ============================================================================
+// FIXED EXPORT FUNCTION - Uses server-side route with correct IP addresses
+// ============================================================================
 function exportLogs() {
-    // Get table data
-    const table = document.getElementById('logsTable');
-    let csv = 'ID,Timestamp,User,Username,Activity Type,Description,IP Address\n';
+    // Build URL with current filters
+    const urlParams = new URLSearchParams(window.location.search);
+    const exportUrl = '{{ url_for("export_logs") }}?' + urlParams.toString();
     
-    // Get all rows
-    const rows = table.querySelectorAll('tbody tr');
-    rows.forEach(row => {
-        const cols = row.querySelectorAll('td');
-        const id = cols[0].textContent.trim();
-        const timestamp = cols[1].textContent.trim();
-        const fullName = cols[2].querySelector('strong')?.textContent || 'System';
-        const username = cols[2].querySelector('.text-muted')?.textContent.replace('@', '') || '';
-        const activityType = cols[3].textContent.trim();
-        const description = cols[4].textContent.trim().replace(/,/g, ';');
-        const ip = cols[5].textContent.trim();
-        
-        csv += `${id},"${timestamp}","${fullName}","${username}","${activityType}","${description}","${ip}"\n`;
-    });
-    
-    // Create download link
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'activity_logs_' + new Date().toISOString().slice(0,10) + '.csv';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
+    // Redirect to server-side export route
+    window.location.href = exportUrl;
 }
 </script>
 {% endblock %}
