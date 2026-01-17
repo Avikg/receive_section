@@ -4302,6 +4302,26 @@ def internal_error(error):
     """Handle 500 errors"""
     return render_template('errors/500.html'), 500
 
+@app.route('/service-worker.js')
+def service_worker():
+    """Empty service worker to prevent 404 errors"""
+    from flask import Response
+    js_code = '''
+// Empty service worker
+self.addEventListener('install', function(event) {
+  console.log('Service Worker: Installed');
+});
+
+self.addEventListener('activate', function(event) {
+  console.log('Service Worker: Activated');
+});
+
+self.addEventListener('fetch', function(event) {
+  event.respondWith(fetch(event.request));
+});
+'''
+    return Response(js_code, mimetype='application/javascript')
+
 # Run the application
 if __name__ == '__main__':
     print("=" * 60)
